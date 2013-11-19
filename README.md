@@ -1,4 +1,4 @@
-# fluent-plugin-anonymizer
+# fluent-plugin-anonymizer [![Build Status](https://travis-ci.org/y-ken/fluent-plugin-anonymizer.png?branch=master)](https://travis-ci.org/y-ken/fluent-plugin-anonymizer)
 
 ## Overview
 
@@ -18,7 +18,7 @@ gem install fluent-plugin-anonymizer
 
 #### configuration
 
-It is a sample to hash record with sha1 for user_id, member_id, mail.
+It is a sample to hash record with sha1 for `user_id`, `member_id` and `mail`. For IP address, rounding number with 24bit netmask.
 
 `````
 <source>
