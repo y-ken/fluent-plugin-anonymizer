@@ -27,7 +27,7 @@ It is a sample to hash record with sha1 for `user_id`, `member_id` and `mail`. F
 </source>
 
 <match test.message>
-  type anonymize
+  type anonymizer
   sha1_keys         user_id, member_id, mail
   ipv4_mask_keys    host
   ipv4_mask_subnet  24
