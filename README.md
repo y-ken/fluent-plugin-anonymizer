@@ -18,7 +18,7 @@ gem install fluent-plugin-anonymizer
 
 #### configuration
 
-It is a sample to hash record with sha1 for `user_id`, `member_id` and `mail`. For IP address, rounding number with 24bit netmask.
+It is a sample to hash record with sha1 for `user_id`, `member_id` and `mail`. For IP address, rounding number with 24bit netmask with `ipv4_mask_keys` and `ipv4_mask_subnet` option.
 
 `````
 <source>
@@ -29,7 +29,6 @@ It is a sample to hash record with sha1 for `user_id`, `member_id` and `mail`. F
 <match test.message>
   type anonymize
   sha1_keys         user_id, member_id, mail
-  hash_salt         foobar
   ipv4_mask_keys    host
   ipv4_mask_subnet  24
   remove_tag_prefix test.
