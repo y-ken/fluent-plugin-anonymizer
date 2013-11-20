@@ -32,7 +32,7 @@ It is a sample to hash record with sha1 for `user_id`, `member_id` and `mail`. F
   ipv4_mask_keys    host
   ipv4_mask_subnet  24
   remove_tag_prefix test.
-  add_rag_prefix    anonymized.
+  add_tag_prefix    anonymized.
 </match>
 
 <match anonymized.message>
@@ -73,15 +73,16 @@ Round number for following one or more keys. It makes easy to aggregate calculat
 |                8 | 192.168.200.100 | 192.0.0.0     |
 
 * include_tag_key (default: false)
+* tag_key
 
-Add original tag name into filtered record using SetTagKeyMixin function.
+Add original tag name into filtered record using SetTagKeyMixin.
 
 * remove_tag_prefix
 * remove_tag_suffix
 * add_tag_prefix
 * add_tag_suffix
 
-Edit tag format using HandleTagNameMixin function.
+set one or more option are required for editing tag name using HandleTagNameMixin.
 
 ## Notes
 
