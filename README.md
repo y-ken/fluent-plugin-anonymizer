@@ -49,7 +49,7 @@ $ tail -f /var/log/td-agent/td-agent.log
 2013-11-19 18:30:21 +0900 anonymized.message: {"host":"10.102.0.0","member_id":"8cb2237d0679ca88db6464eac60da96345513964","mail":"914fec35ce8bfa1a067581032f26b053591ee38a"}
 `````
 
-### Params
+## Parameters
 
 * `md5_keys` `sha1_keys` `sha256_keys` `sha384_keys` `sha512_keys`
 
@@ -82,6 +82,10 @@ Add original tag name into filtered record using SetTagKeyMixin function.
 * add_tag_suffix
 
 Edit tag format using HandleTagNameMixin function.
+
+## Notes
+
+* hashing nested value behavior is compatible with [LogStash::Filters::Anonymize](https://github.com/logstash/logstash/blob/master/lib/logstash/filters/anonymize.rb) does. For further details, please check it out the test code at [test_emit_nest_value](https://github.com/y-ken/fluent-plugin-anonymizer/blob/master/test/plugin/test_out_anonymizer.rb#L98).
 
 ## Blog Articles
 

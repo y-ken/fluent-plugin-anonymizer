@@ -47,23 +47,23 @@ class Fluent::AnonymizerOutput < Fluent::Output
 
   def emit(tag, es, chain)
     es.each do |time, record|
-      record = filter_anonymize_record(record)
+      @hash_keys.each do |hash_key, hash_algorithm|
+        next unless record.include?(hash_key)
+        record[hash_key] = filter_anonymize_record(record[hash_key], hash_algorithm)
+      end
       filter_record(tag, time, record)
       Fluent::Engine.emit(tag, time, record)
     end
     chain.next
   end
 
-  def filter_anonymize_record(record)
-    @hash_keys.each do |hash_key, hash_algorithm|
-      next unless record.include?(hash_key)
-      if record[hash_key].is_a?(Array)
-        record[hash_key] = record[hash_key].collect { |v| anonymize(v, hash_algorithm, @hash_salt) }
-      else
-        record[hash_key] = anonymize(record[hash_key], hash_algorithm, @hash_salt)
-      end
+  def filter_anonymize_record(data, hash_algorithm)
+    if data.is_a?(Array)
+      data = data.collect { |v| anonymize(v, hash_algorithm, @hash_salt) }
+    else
+      data = anonymize(data, hash_algorithm, @hash_salt)
     end
-    return record
+    data
   end
 
   def anonymize(message, algorithm, salt)
