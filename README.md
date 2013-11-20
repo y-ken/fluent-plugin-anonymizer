@@ -2,7 +2,7 @@
 
 ## Overview
 
-Fluentd filter output plugin to anonymize records. This data masking plugin protects privacy data such as IP address, ID, email, phone number and so on.
+Fluentd filter output plugin to anonymize records with MD5/SHA1/SHA256/SHA384/SHA512 algorithms. This data masking plugin protects privacy data such as ID, email, phone number, IP address and so on.
 
 ## Installation
 
@@ -46,7 +46,7 @@ It is a sample to hash record with sha1 for `user_id`, `member_id` and `mail`. F
 $ echo '{"host":"10.102.3.80","member_id":"12345", "mail":"example@example.com"}' | fluent-cat test.message
 
 $ tail -f /var/log/td-agent/td-agent.log
-2013-11-19 18:30:21 +0900 anonymized.message: {"host":"10.102.0.0","member_id":"8cb2237d0679ca88db6464eac60da96345513964","mail":"914fec35ce8bfa1a067581032f26b053591ee38a"}
+2013-11-19 18:30:21 +0900 anonymized.message: {"host":"10.102.3.0","member_id":"8cb2237d0679ca88db6464eac60da96345513964","mail":"914fec35ce8bfa1a067581032f26b053591ee38a"}
 `````
 
 ## Parameters

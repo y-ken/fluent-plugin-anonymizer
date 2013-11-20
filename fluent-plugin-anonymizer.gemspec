@@ -7,7 +7,7 @@ Gem::Specification.new do |spec|
   spec.version       = "0.0.1"
   spec.authors       = ["Kentaro Yoshida"]
   spec.email         = ["y.ken.studio@gmail.com"]
-  spec.summary       = %q{Fluentd filter output plugin to anonymize records. This data masking plugin protects privacy data such as IP address, ID, email, phone number and so on.}
+  spec.summary       = %q{Fluentd filter output plugin to anonymize records with MD5/SHA1/SHA256/SHA384/SHA512 algorithms. This data masking plugin protects privacy data such as ID, email, phone number, IP address and so on.}
   spec.homepage      = "https://github.com/y-ken/fluent-plugin-anonymizer"
   spec.license       = "Apache License, Version 2.0"
 
