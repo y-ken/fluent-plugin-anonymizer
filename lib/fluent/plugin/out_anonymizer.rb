@@ -51,8 +51,9 @@ class Fluent::AnonymizerOutput < Fluent::Output
         next unless record.include?(hash_key)
         record[hash_key] = filter_anonymize_record(record[hash_key], hash_algorithm)
       end
-      filter_record(tag, time, record)
-      Fluent::Engine.emit(tag, time, record)
+      t = tag.dup
+      filter_record(t, time, record)
+      Fluent::Engine.emit(t, time, record)
     end
     chain.next
   end
