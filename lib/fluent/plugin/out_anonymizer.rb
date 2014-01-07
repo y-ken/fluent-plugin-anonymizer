@@ -61,10 +61,15 @@ class Fluent::AnonymizerOutput < Fluent::Output
   end
 
   def filter_anonymize_record(data, hash_algorithm)
-    if data.is_a?(Array)
-      data = data.collect { |v| anonymize(v, hash_algorithm, @hash_salt) }
-    else
-      data = anonymize(data, hash_algorithm, @hash_salt)
+    begin
+      if data.is_a?(Array)
+        data = data.collect { |v| anonymize(v, hash_algorithm, @hash_salt) }
+      else
+        data = anonymize(data, hash_algorithm, @hash_salt)
+      end
+    rescue StandardError => e
+      $log.error "anonymizer: failed to anonymize record. :message=>#{e.message} :data=>#{data}"
+      $log.error e.backtrace.join("\n")
     end
     data
   end
