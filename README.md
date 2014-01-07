@@ -2,7 +2,7 @@
 
 ## Overview
 
-Fluentd filter output plugin to anonymize records with MD5/SHA1/SHA256/SHA384/SHA512 algorithms. This data masking plugin protects privacy data such as ID, email, phone number, IP address and so on.
+Fluentd filter output plugin to anonymize records with MD5/SHA1/SHA256/SHA384/SHA512 algorithms. This data masking plugin protects privacy data such as ID, email, phone number, IPv4/IPv6 address and so on.
 
 ## Installation
 
@@ -18,7 +18,7 @@ gem install fluent-plugin-anonymizer
 
 #### configuration
 
-It is a sample to hash record with sha1 for `user_id`, `member_id` and `mail`. For IP address, rounding number with 24bit netmask with `ipv4_mask_keys` and `ipv4_mask_subnet` option.
+It is a sample to hash record with sha1 for `user_id`, `member_id` and `mail`. For IP address, auto-detecting IPv4/IPv6 and rounding number with 24bit(IPv4) or 104bit(IPv6) netmask using `ipaddr_mask_keys` and `ipv4_mask_subnet`, `ipv6_mask_subnet` option.
 
 `````
 <source>
@@ -29,8 +29,9 @@ It is a sample to hash record with sha1 for `user_id`, `member_id` and `mail`. F
 <match test.message>
   type anonymizer
   sha1_keys         user_id, member_id, mail
-  ipv4_mask_keys    host
+  ipaddr_mask_keys  host
   ipv4_mask_subnet  24
+  ipv6_mask_subnet  104
   remove_tag_prefix test.
   add_tag_prefix    anonymized.
 </match>
@@ -44,9 +45,11 @@ It is a sample to hash record with sha1 for `user_id`, `member_id` and `mail`. F
 
 `````
 $ echo '{"host":"10.102.3.80","member_id":"12345", "mail":"example@example.com"}' | fluent-cat test.message
+$ echo '{"host":"2001:db8:0:8d3:0:8a2e:70:7344","member_id":"12345", "mail":"example@example.com"}' | fluent-cat test.message
 
 $ tail -f /var/log/td-agent/td-agent.log
-2013-11-19 18:30:21 +0900 anonymized.message: {"host":"10.102.3.0","member_id":"8cb2237d0679ca88db6464eac60da96345513964","mail":"914fec35ce8bfa1a067581032f26b053591ee38a"}
+2014-01-06 18:30:21 +0900 anonymized.message: {"host":"10.102.3.0","member_id":"8cb2237d0679ca88db6464eac60da96345513964","mail":"914fec35ce8bfa1a067581032f26b053591ee38a"}
+2014-01-06 18:30:22 +0900 anonymized.message: {"host":"2001:db8:0:8d3:0:8a2e::","member_id":"8cb2237d0679ca88db6464eac60da96345513964","mail":"914fec35ce8bfa1a067581032f26b053591ee38a"}
 `````
 
 ## Parameters
@@ -61,8 +64,9 @@ This salt affects for `md5_keys` `sha1_keys` `sha256_keys` `sha384_keys` `sha512
 It is recommend to set a hash salt to prevent rainbow table attacks.
 
 
-* `ipv4_mask_keys`
+* `ipaddr_mask_keys`
 * `ipv4_mask_subnet` (default: 24)
+* `ipv6_mask_subnet` (default: 104)
 
 Round number for following one or more keys. It makes easy to aggregate calculation. 
 
