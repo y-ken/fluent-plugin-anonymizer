@@ -39,6 +39,7 @@ class Fluent::AnonymizerOutput < Fluent::Output
     if @hash_keys.count < 1
       raise Fluent::ConfigError, "anonymizer: missing hash keys setting."
     end
+    $log.info "anonymizer: adding anonymize rules for each field. #{@hash_keys}"
 
     if ( !@remove_tag_prefix && !@remove_tag_suffix && !@add_tag_prefix && !@add_tag_suffix )
       raise Fluent::ConfigError, "anonymizer: missing remove_tag_prefix, remove_tag_suffix, add_tag_prefix or add_tag_suffix."
