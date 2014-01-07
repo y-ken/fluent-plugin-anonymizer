@@ -34,7 +34,7 @@ class AnonymizerOutputTest < Test::Unit::TestCase
   ]
 
   CONFIG_IPV6 = %[
-    ipaddr_mask_keys  host1, host2
+    ipaddr_mask_keys  host
     ipv4_mask_subnet  24
     ipv6_mask_subnet  104
     remove_tag_prefix input.
@@ -124,16 +124,16 @@ class AnonymizerOutputTest < Test::Unit::TestCase
   def test_emit_ipv6
     d1 = create_driver(CONFIG_IPV6, 'input.access')
     d1.run do
-      d1.emit({
-        'host1' => '10.102.3.80',
-        'host2' => '0:0:0:0:0:FFFF:129.144.52.38',
-      })
+      d1.emit({'host' => '10.102.3.80'})
+      d1.emit({'host' => '0:0:0:0:0:FFFF:129.144.52.38'})
+      d1.emit({'host' => '2001:db8:0:8d3:0:8a2e:70:7344'})
     end
     emits = d1.emits
-    assert_equal 1, emits.length
-    p emits[0]
+    assert_equal 3, emits.length
+    p emits
     assert_equal 'anonymized.access', emits[0][0] # tag
-    assert_equal '10.102.3.0', emits[0][2]['host1']
-    assert_equal '::ffff:129.0.0.0', emits[0][2]['host2']
+    assert_equal '10.102.3.0', emits[0][2]['host']
+    assert_equal '::ffff:129.0.0.0', emits[1][2]['host']
+    assert_equal '2001:db8:0:8d3:0:8a2e::', emits[2][2]['host']
   end
 end
