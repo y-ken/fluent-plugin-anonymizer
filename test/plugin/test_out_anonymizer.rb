@@ -12,7 +12,7 @@ class AnonymizerOutputTest < Test::Unit::TestCase
     sha384_keys       data_for_sha384
     sha512_keys       data_for_sha512
     hash_salt         test_salt_string
-    ipv4_mask_keys    host
+    ipaddr_mask_keys  host
     ipv4_mask_subnet  24
     remove_tag_prefix input.
     add_tag_prefix    anonymized.
@@ -20,7 +20,7 @@ class AnonymizerOutputTest < Test::Unit::TestCase
 
   CONFIG_MULTI_KEYS = %[
     sha1_keys         member_id, mail, telephone
-    ipv4_mask_keys    host
+    ipaddr_mask_keys  host
     ipv4_mask_subnet  16
     remove_tag_prefix input.
     add_tag_prefix    anonymized.
@@ -28,7 +28,15 @@ class AnonymizerOutputTest < Test::Unit::TestCase
 
   CONFIG_NEST_VALUE = %[
     sha1_keys         array,hash
-    ipv4_mask_keys    host
+    ipaddr_mask_keys  host
+    remove_tag_prefix input.
+    add_tag_prefix    anonymized.
+  ]
+
+  CONFIG_IPV6 = %[
+    ipaddr_mask_keys  host1, host2
+    ipv4_mask_subnet  24
+    ipv6_mask_subnet  104
     remove_tag_prefix input.
     add_tag_prefix    anonymized.
   ]
@@ -111,5 +119,21 @@ class AnonymizerOutputTest < Test::Unit::TestCase
     assert_equal '10.102.3.0', emits[0][2]['host']
     assert_equal ["e3cbba8883fe746c6e35783c9404b4bc0c7ee9eb", "a4ac914c09d7c097fe1f4f96b897e625b6922069"], emits[0][2]['array']
     assert_equal '1a1903d78aed9403649d61cb21ba6b489249761b', emits[0][2]['hash']
+  end
+
+  def test_emit_ipv6
+    d1 = create_driver(CONFIG_IPV6, 'input.access')
+    d1.run do
+      d1.emit({
+        'host1' => '10.102.3.80',
+        'host2' => '0:0:0:0:0:FFFF:129.144.52.38',
+      })
+    end
+    emits = d1.emits
+    assert_equal 1, emits.length
+    p emits[0]
+    assert_equal 'anonymized.access', emits[0][0] # tag
+    assert_equal '10.102.3.0', emits[0][2]['host1']
+    assert_equal '::ffff:129.0.0.0', emits[0][2]['host2']
   end
 end

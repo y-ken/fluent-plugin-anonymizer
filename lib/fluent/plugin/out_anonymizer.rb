@@ -1,9 +1,10 @@
 class Fluent::AnonymizerOutput < Fluent::Output
   Fluent::Plugin.register_output('anonymizer', self)
   
-  HASH_ALGORITHM = %w(md5 sha1 sha256 sha384 sha512 ipv4_mask)
+  HASH_ALGORITHM = %w(md5 sha1 sha256 sha384 sha512 ipaddr_mask)
   config_param :hash_salt, :string, :default => ''
   config_param :ipv4_mask_subnet, :integer, :default => 24
+  config_param :ipv6_mask_subnet, :integer, :default => 104
 
   include Fluent::HandleTagNameMixin
 
@@ -72,8 +73,10 @@ class Fluent::AnonymizerOutput < Fluent::Output
     case algorithm
     when 'md5','sha1','sha256','sha384','sha512'
       DIGEST[algorithm].call.hexdigest(salt + message.to_s)
-    when 'ipv4_mask'
-      IPAddr.new(message).mask(@ipv4_mask_subnet).to_s
+    when 'ipaddr_mask'
+      address = IPAddr.new(message)
+      subnet = address.ipv4? ? @ipv4_mask_subnet : @ipv6_mask_subnet
+      address.mask(subnet).to_s
     else
       $log.warn "anonymizer: unknown algorithm #{algorithm} has called."
     end
