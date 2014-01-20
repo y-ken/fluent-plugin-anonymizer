@@ -18,29 +18,6 @@ class AnonymizerOutputTest < Test::Unit::TestCase
     add_tag_prefix    anonymized.
   ]
 
-  CONFIG_MULTI_KEYS = %[
-    sha1_keys         member_id, mail, telephone
-    ipaddr_mask_keys  host
-    ipv4_mask_subnet  16
-    remove_tag_prefix input.
-    add_tag_prefix    anonymized.
-  ]
-
-  CONFIG_NEST_VALUE = %[
-    sha1_keys         array,hash
-    ipaddr_mask_keys  host
-    remove_tag_prefix input.
-    add_tag_prefix    anonymized.
-  ]
-
-  CONFIG_IPV6 = %[
-    ipaddr_mask_keys  host
-    ipv4_mask_subnet  24
-    ipv6_mask_subnet  104
-    remove_tag_prefix input.
-    add_tag_prefix    anonymized.
-  ]
-
   def create_driver(conf=CONFIG,tag='test')
     Fluent::Test::OutputTestDriver.new(Fluent::AnonymizerOutput, tag).configure(conf)
   end
@@ -82,10 +59,17 @@ class AnonymizerOutputTest < Test::Unit::TestCase
   end
 
   def test_emit_multi_keys
-    d1 = create_driver(CONFIG_MULTI_KEYS, 'input.access')
+    d1 = create_driver(%[
+      sha1_keys         member_id, mail, telephone
+      ipaddr_mask_keys  host, host2
+      ipv4_mask_subnet  16
+      remove_tag_prefix input.
+      add_tag_prefix    anonymized.
+    ], 'input.access')
     d1.run do
       d1.emit({
         'host' => '10.102.3.80',
+        'host2' => '10.102.3.80',
         'member_id' => '12345',
         'mail' => 'example@example.com',
         'telephone' => '00-0000-0000',
@@ -97,6 +81,7 @@ class AnonymizerOutputTest < Test::Unit::TestCase
     p emits[0]
     assert_equal 'anonymized.access', emits[0][0] # tag
     assert_equal '10.102.0.0', emits[0][2]['host']
+    assert_equal '10.102.0.0', emits[0][2]['host2']
     assert_equal '774472f0dc892f0b3299cae8dadacd0a74ba59d7', emits[0][2]['member_id']
     assert_equal 'd7b728209f5dd8df10cecbced30394c3c7fc2c82', emits[0][2]['mail']
     assert_equal 'a67f73c395105a358a03a0f127bf64b5495e7841', emits[0][2]['telephone']
@@ -104,7 +89,12 @@ class AnonymizerOutputTest < Test::Unit::TestCase
   end
 
   def test_emit_nest_value
-    d1 = create_driver(CONFIG_NEST_VALUE, 'input.access')
+    d1 = create_driver(%[
+      sha1_keys         array,hash
+      ipaddr_mask_keys  host
+      remove_tag_prefix input.
+      add_tag_prefix    anonymized.
+    ], 'input.access')
     d1.run do
       d1.emit({
         'host' => '10.102.3.80',
@@ -122,7 +112,13 @@ class AnonymizerOutputTest < Test::Unit::TestCase
   end
 
   def test_emit_ipv6
-    d1 = create_driver(CONFIG_IPV6, 'input.access')
+    d1 = create_driver(%[
+      ipaddr_mask_keys  host
+      ipv4_mask_subnet  24
+      ipv6_mask_subnet  104
+      remove_tag_prefix input.
+      add_tag_prefix    anonymized.
+    ], 'input.access')
     d1.run do
       d1.emit({'host' => '10.102.3.80'})
       d1.emit({'host' => '0:0:0:0:0:FFFF:129.144.52.38'})
