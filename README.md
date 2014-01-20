@@ -2,7 +2,7 @@
 
 ## Overview
 
-Fluentd filter output plugin to anonymize records with HMAC of MD5/SHA1/SHA256/SHA384/SHA512 algorithms. This data masking plugin protects privacy data such as UserID, Email, Phone number, IPv4/IPv6 address and so on.
+Fluentd filter output plugin to anonymize records with [OpenSSL::HMAC](http://docs.ruby-lang.org/ja/1.9.3/class/OpenSSL=3a=3aHMAC.html) of MD5/SHA1/SHA256/SHA384/SHA512 algorithms. This data masking plugin protects privacy data such as UserID, Email, Phone number, IPv4/IPv6 address and so on.
 
 ## Installation
 
@@ -101,7 +101,7 @@ set one or more option are required for editing tag name using HandleTagNameMixi
 
 * tag
 
-On using this option [like 'tag anonymized.${tag}' with tag placeholder](https://github.com/y-ken/fluent-plugin-anonymizer/blob/master/test/plugin/test_out_anonymizer.rb), it will be overwrite after these options affected. which are remove_tag_prefix, remove_tag_suffix, add_tag_prefix and add_tag_suffix.
+On using this option [like 'tag anonymized.${tag}' with tag placeholder](https://github.com/y-ken/fluent-plugin-anonymizer/blob/master/test/plugin/test_out_anonymizer.rb#L153), it will be overwrite after these options affected. which are remove_tag_prefix, remove_tag_suffix, add_tag_prefix and add_tag_suffix.
 
 ## Notes
 
