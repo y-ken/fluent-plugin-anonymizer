@@ -99,13 +99,18 @@ Add original tag name into filtered record using SetTagKeyMixin.
 
 set one or more option are required for editing tag name using HandleTagNameMixin.
 
+* tag
+
+On using this option [like 'tag anonymized.${tag}' with tag placeholder](https://github.com/y-ken/fluent-plugin-anonymizer/blob/master/test/plugin/test_out_anonymizer.rb), it will be overwrite after these options affected. which are remove_tag_prefix, remove_tag_suffix, add_tag_prefix and add_tag_suffix.
+
 ## Notes
 
-* hashing nested value behavior is compatible with [LogStash::Filters::Anonymize](https://github.com/logstash/logstash/blob/master/lib/logstash/filters/anonymize.rb) does. For further details, please check it out the test code at [test_emit_nest_value](https://github.com/y-ken/fluent-plugin-anonymizer/blob/master/test/plugin/test_out_anonymizer.rb#L98).
+* hashing nested value behavior is compatible with [LogStash::Filters::Anonymize](https://github.com/logstash/logstash/blob/master/lib/logstash/filters/anonymize.rb) does. For further details, please check it out the test code at [test_emit_nest_value](https://github.com/y-ken/fluent-plugin-anonymizer/blob/master/test/plugin/test_out_anonymizer.rb#L91).
 
 ## Blog Articles
 
-* http://y-ken.hatenablog.com/entry/fluent-plugin-anonymizer-has-released
+* 個人情報を難読化するfluent-plugin-anonymizerをリリースしました #fluentd - Y-Ken Studio  
+http://y-ken.hatenablog.com/entry/fluent-plugin-anonymizer-has-released
 
 ## TODO
 

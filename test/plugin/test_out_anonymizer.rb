@@ -132,4 +132,39 @@ class AnonymizerOutputTest < Test::Unit::TestCase
     assert_equal '::ffff:129.0.0.0', emits[1][2]['host']
     assert_equal '2001:db8:0:8d3:0:8a2e::', emits[2][2]['host']
   end
+
+  def test_emit_tag_static
+    d1 = create_driver(%[
+      sha1_keys         member_id
+      tag               anonymized.message
+    ], 'input.access')
+    d1.run do
+      d1.emit({
+        'member_id' => '12345',
+      })
+    end
+    emits = d1.emits
+    assert_equal 1, emits.length
+    p emits[0]
+    assert_equal 'anonymized.message', emits[0][0] # tag
+    assert_equal '774472f0dc892f0b3299cae8dadacd0a74ba59d7', emits[0][2]['member_id']
+  end
+
+  def test_emit_tag_placeholder
+    d1 = create_driver(%[
+      sha1_keys         member_id
+      tag               anonymized.${tag}
+      remove_tag_prefix input.
+    ], 'input.access')
+    d1.run do
+      d1.emit({
+        'member_id' => '12345',
+      })
+    end
+    emits = d1.emits
+    assert_equal 1, emits.length
+    p emits[0]
+    assert_equal 'anonymized.access', emits[0][0] # tag
+    assert_equal '774472f0dc892f0b3299cae8dadacd0a74ba59d7', emits[0][2]['member_id']
+  end
 end

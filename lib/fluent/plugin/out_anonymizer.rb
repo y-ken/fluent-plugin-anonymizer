@@ -2,6 +2,7 @@ class Fluent::AnonymizerOutput < Fluent::Output
   Fluent::Plugin.register_output('anonymizer', self)
   
   HASH_ALGORITHM = %w(md5 sha1 sha256 sha384 sha512 ipaddr_mask)
+  config_param :tag, :string, :default => nil
   config_param :hash_salt, :string, :default => ''
   config_param :ipv4_mask_subnet, :integer, :default => 24
   config_param :ipv6_mask_subnet, :integer, :default => 104
@@ -42,7 +43,7 @@ class Fluent::AnonymizerOutput < Fluent::Output
     end
     $log.info "anonymizer: adding anonymize rules for each field. #{@hash_keys}"
 
-    if ( !@remove_tag_prefix && !@remove_tag_suffix && !@add_tag_prefix && !@add_tag_suffix )
+    if ( !@tag && !@remove_tag_prefix && !@remove_tag_suffix && !@add_tag_prefix && !@add_tag_suffix )
       raise Fluent::ConfigError, "anonymizer: missing remove_tag_prefix, remove_tag_suffix, add_tag_prefix or add_tag_suffix."
     end
   end
@@ -53,11 +54,23 @@ class Fluent::AnonymizerOutput < Fluent::Output
         next unless record.include?(hash_key)
         record[hash_key] = filter_anonymize_record(record[hash_key], hash_algorithm)
       end
-      t = tag.dup
-      filter_record(t, time, record)
-      Fluent::Engine.emit(t, time, record)
+      emit_tag = tag.dup
+      filter_record(emit_tag, time, record)
+      emit_tag = rewrite_tag(@tag, emit_tag) if @tag
+      Fluent::Engine.emit(emit_tag, time, record)
     end
     chain.next
+  end
+
+  def rewrite_tag(rewritetag, tag)
+    placeholder = {
+      '${tag}' => tag,
+      '__TAG__' => tag
+    }
+    return rewritetag.gsub(/(\${[a-z_]+(\[[0-9]+\])?}|__[A-Z_]+__)/) do
+      $log.warn "anonymizer: unknown placeholder found. :placeholder=>#{$1} :tag=>#{tag} :rewritetag=>#{rewritetag}" unless placeholder.include?($1)
+      placeholder[$1]
+    end
   end
 
   def filter_anonymize_record(data, hash_algorithm)
