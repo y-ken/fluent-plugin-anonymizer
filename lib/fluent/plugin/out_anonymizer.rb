@@ -12,15 +12,15 @@ class Fluent::AnonymizerOutput < Fluent::Output
   config_set_default :include_tag_key, false
 
   DIGEST = {
-    "md5" => Proc.new { Digest::MD5 },
-    "sha1" => Proc.new { Digest::SHA1 },
-    "sha256" => Proc.new { Digest::SHA256 },
-    "sha384" => Proc.new { Digest::SHA384 },
-    "sha512" => Proc.new { Digest::SHA512 }
+    "md5" => Proc.new { OpenSSL::Digest.new('md5') },
+    "sha1" => Proc.new { OpenSSL::Digest.new('sha1') },
+    "sha256" => Proc.new { OpenSSL::Digest.new('sha256') },
+    "sha384" => Proc.new { OpenSSL::Digest.new('sha384') },
+    "sha512" => Proc.new { OpenSSL::Digest.new('sha512') }
   }
 
   def initialize
-    require 'digest/sha2'
+    require 'openssl'
     require 'ipaddr'
     super
   end
@@ -77,7 +77,7 @@ class Fluent::AnonymizerOutput < Fluent::Output
   def anonymize(message, algorithm, salt)
     case algorithm
     when 'md5','sha1','sha256','sha384','sha512'
-      DIGEST[algorithm].call.hexdigest(salt + message.to_s)
+      OpenSSL::HMAC.hexdigest(DIGEST[algorithm].call, salt, message.to_s)
     when 'ipaddr_mask'
       address = IPAddr.new(message)
       subnet = address.ipv4? ? @ipv4_mask_subnet : @ipv6_mask_subnet
