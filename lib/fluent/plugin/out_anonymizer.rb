@@ -1,3 +1,5 @@
+require 'fluent/mixin/rewrite_tag_name'
+
 class Fluent::AnonymizerOutput < Fluent::Output
   Fluent::Plugin.register_output('anonymizer', self)
   
@@ -8,7 +10,7 @@ class Fluent::AnonymizerOutput < Fluent::Output
   config_param :ipv6_mask_subnet, :integer, :default => 104
 
   include Fluent::HandleTagNameMixin
-
+  include Fluent::Mixin::RewriteTagName
   include Fluent::SetTagKeyMixin
   config_set_default :include_tag_key, false
 
@@ -56,22 +58,11 @@ class Fluent::AnonymizerOutput < Fluent::Output
       end
       emit_tag = tag.dup
       filter_record(emit_tag, time, record)
-      emit_tag = rewrite_tag(@tag, emit_tag) if @tag
       Fluent::Engine.emit(emit_tag, time, record)
     end
     chain.next
   end
 
-  def rewrite_tag(rewritetag, tag)
-    placeholder = {
-      '${tag}' => tag,
-      '__TAG__' => tag
-    }
-    return rewritetag.gsub(/(\${[a-z_]+(\[[0-9]+\])?}|__[A-Z_]+__)/) do
-      $log.warn "anonymizer: unknown placeholder found. :placeholder=>#{$1} :tag=>#{tag} :rewritetag=>#{rewritetag}" unless placeholder.include?($1)
-      placeholder[$1]
-    end
-  end
 
   def filter_anonymize_record(data, hash_algorithm)
     begin
