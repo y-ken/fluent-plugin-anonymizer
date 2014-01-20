@@ -2,9 +2,11 @@
 
 ## Overview
 
-Fluentd filter output plugin to anonymize records with MD5/SHA1/SHA256/SHA384/SHA512 algorithms. This data masking plugin protects privacy data such as ID, email, phone number, IPv4/IPv6 address and so on.
+Fluentd filter output plugin to anonymize records with HMAC of MD5/SHA1/SHA256/SHA384/SHA512 algorithms. This data masking plugin protects privacy data such as UserID, Email, Phone number, IPv4/IPv6 address and so on.
 
 ## Installation
+
+install with gem or fluent-gem command as:
 
 `````
 ### native gem
@@ -28,10 +30,19 @@ It is a sample to hash record with sha1 for `user_id`, `member_id` and `mail`. F
 
 <match test.message>
   type anonymizer
+  
+  # Specify hashing keys with comma
   sha1_keys         user_id, member_id, mail
+  
+  # Set hash salt with any strings for more security
+  hash_salt         mysaltstring
+  
+  # Specify rounding address keys with comma and subnet mask
   ipaddr_mask_keys  host
   ipv4_mask_subnet  24
   ipv6_mask_subnet  104
+  
+  # Set tag rename pattern
   remove_tag_prefix test.
   add_tag_prefix    anonymized.
 </match>
@@ -48,8 +59,8 @@ $ echo '{"host":"10.102.3.80","member_id":"12345", "mail":"example@example.com"}
 $ echo '{"host":"2001:db8:0:8d3:0:8a2e:70:7344","member_id":"12345", "mail":"example@example.com"}' | fluent-cat test.message
 
 $ tail -f /var/log/td-agent/td-agent.log
-2014-01-06 18:30:21 +0900 anonymized.message: {"host":"10.102.3.0","member_id":"8cb2237d0679ca88db6464eac60da96345513964","mail":"914fec35ce8bfa1a067581032f26b053591ee38a"}
-2014-01-06 18:30:22 +0900 anonymized.message: {"host":"2001:db8:0:8d3:0:8a2e::","member_id":"8cb2237d0679ca88db6464eac60da96345513964","mail":"914fec35ce8bfa1a067581032f26b053591ee38a"}
+2014-01-06 18:30:21 +0900 anonymized.message: {"host":"10.102.3.0","member_id":"61f6c1b5f19e0a7f73dd52a23534085bf01f2c67","mail":"eeb890d74b8c1c4cd1e35a3ea62166e0b770f4f4"}
+2014-01-06 18:30:22 +0900 anonymized.message: {"host":"2001:db8:0:8d3:0:8a2e::","member_id":"61f6c1b5f19e0a7f73dd52a23534085bf01f2c67","mail":"eeb890d74b8c1c4cd1e35a3ea62166e0b770f4f4"}
 `````
 
 ## Parameters
