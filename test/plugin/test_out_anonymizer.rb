@@ -30,7 +30,6 @@ class AnonymizerOutputTest < Test::Unit::TestCase
       d = create_driver('unknown_keys')
     }
     d = create_driver(CONFIG)
-    puts d.instance.inspect
     assert_equal 'test_salt_string', d.instance.config['hash_salt']
   end
 
