@@ -3,6 +3,11 @@ require 'fluent/mixin/rewrite_tag_name'
 class Fluent::AnonymizerOutput < Fluent::Output
   Fluent::Plugin.register_output('anonymizer', self)
   
+  # To support log_level option since Fluentd v0.10.43
+  unless method_defined?(:log)
+    define_method(:log) { $log }
+  end
+
   HASH_ALGORITHM = %w(md5 sha1 sha256 sha384 sha512 ipaddr_mask)
   config_param :tag, :string, :default => nil
   config_param :hash_salt, :string, :default => ''
@@ -43,7 +48,7 @@ class Fluent::AnonymizerOutput < Fluent::Output
     if @hash_keys.count < 1
       raise Fluent::ConfigError, "anonymizer: missing hash keys setting."
     end
-    $log.info "anonymizer: adding anonymize rules for each field. #{@hash_keys}"
+    log.info "anonymizer: adding anonymize rules for each field. #{@hash_keys}"
 
     if ( !@tag && !@remove_tag_prefix && !@remove_tag_suffix && !@add_tag_prefix && !@add_tag_suffix )
       raise Fluent::ConfigError, "anonymizer: missing remove_tag_prefix, remove_tag_suffix, add_tag_prefix or add_tag_suffix."
@@ -72,8 +77,8 @@ class Fluent::AnonymizerOutput < Fluent::Output
         data = anonymize(data, hash_algorithm, @hash_salt)
       end
     rescue StandardError => e
-      $log.error "anonymizer: failed to anonymize record. :message=>#{e.message} :data=>#{data}"
-      $log.error e.backtrace.join("\n")
+      log.error "anonymizer: failed to anonymize record. :message=>#{e.message} :data=>#{data}"
+      log.error e.backtrace.join("\n")
     end
     data
   end
@@ -87,7 +92,7 @@ class Fluent::AnonymizerOutput < Fluent::Output
       subnet = address.ipv4? ? @ipv4_mask_subnet : @ipv6_mask_subnet
       address.mask(subnet).to_s
     else
-      $log.warn "anonymizer: unknown algorithm #{algorithm} has called."
+      log.warn "anonymizer: unknown algorithm #{algorithm} has called."
     end
   end
 end
