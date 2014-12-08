@@ -47,7 +47,6 @@ class AnonymizerOutputTest < Test::Unit::TestCase
     end
     emits = d1.emits
     assert_equal 1, emits.length
-    p emits[0]
     assert_equal 'anonymized.access', emits[0][0] # tag
     assert_equal '10.102.3.0', emits[0][2]['host']
     assert_equal 'e738cbde82a514dc60582cd467c240ed', emits[0][2]['data_for_md5']
@@ -77,7 +76,6 @@ class AnonymizerOutputTest < Test::Unit::TestCase
     end
     emits = d1.emits
     assert_equal 1, emits.length
-    p emits[0]
     assert_equal 'anonymized.access', emits[0][0] # tag
     assert_equal '10.102.0.0', emits[0][2]['host']
     assert_equal '10.102.0.0', emits[0][2]['host2']
@@ -89,7 +87,7 @@ class AnonymizerOutputTest < Test::Unit::TestCase
 
   def test_emit_nested_keys
     d1 = create_driver(%[
-      sha1_keys         nested.data
+      sha1_keys         nested.data,nested.nested.data
       ipaddr_mask_keys  hosts.host1
       ipv4_mask_subnet  16
       remove_tag_prefix input.
@@ -101,16 +99,19 @@ class AnonymizerOutputTest < Test::Unit::TestCase
           'host1' => '10.102.3.80',
         },
         'nested' => {
-          'data' => '12345'
+          'data' => '12345',
+          'nested' => {
+            'data' => '12345'
+          }
         }
       })
     end
     emits = d1.emits
     assert_equal 1, emits.length
-    p emits[0]
     assert_equal 'anonymized.access', emits[0][0] # tag
     assert_equal '10.102.0.0', emits[0][2]['hosts']['host1']
     assert_equal '774472f0dc892f0b3299cae8dadacd0a74ba59d7', emits[0][2]['nested']['data']
+    assert_equal '774472f0dc892f0b3299cae8dadacd0a74ba59d7', emits[0][2]['nested']['nested']['data']
   end
 
   def test_emit_nest_value
@@ -129,7 +130,6 @@ class AnonymizerOutputTest < Test::Unit::TestCase
     end
     emits = d1.emits
     assert_equal 1, emits.length
-    p emits[0]
     assert_equal 'anonymized.access', emits[0][0] # tag
     assert_equal '10.102.3.0', emits[0][2]['host']
     assert_equal ["c1628fc0d473cb21b15607c10bdcad19d1a42e24", "ea87abc249f9f2d430edb816514bffeffd3e698e"], emits[0][2]['array']
@@ -151,7 +151,6 @@ class AnonymizerOutputTest < Test::Unit::TestCase
     end
     emits = d1.emits
     assert_equal 3, emits.length
-    p emits
     assert_equal 'anonymized.access', emits[0][0] # tag
     assert_equal '10.102.3.0', emits[0][2]['host']
     assert_equal '::ffff:129.0.0.0', emits[1][2]['host']
@@ -170,7 +169,6 @@ class AnonymizerOutputTest < Test::Unit::TestCase
     end
     emits = d1.emits
     assert_equal 1, emits.length
-    p emits[0]
     assert_equal 'anonymized.message', emits[0][0] # tag
     assert_equal '774472f0dc892f0b3299cae8dadacd0a74ba59d7', emits[0][2]['member_id']
   end
@@ -188,8 +186,8 @@ class AnonymizerOutputTest < Test::Unit::TestCase
     end
     emits = d1.emits
     assert_equal 1, emits.length
-    p emits[0]
     assert_equal 'anonymized.access', emits[0][0] # tag
     assert_equal '774472f0dc892f0b3299cae8dadacd0a74ba59d7', emits[0][2]['member_id']
   end
 end
+

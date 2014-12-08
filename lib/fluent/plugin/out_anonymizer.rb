@@ -105,3 +105,4 @@ class Fluent::AnonymizerOutput < Fluent::Output
     end
   end
 end
+
