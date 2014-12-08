@@ -2,7 +2,7 @@ require 'fluent/mixin/rewrite_tag_name'
 
 class Fluent::AnonymizerOutput < Fluent::Output
   Fluent::Plugin.register_output('anonymizer', self)
-  
+
   # To support log_level option since Fluentd v0.10.43
   unless method_defined?(:log)
     define_method(:log) { $log }
@@ -32,7 +32,7 @@ class Fluent::AnonymizerOutput < Fluent::Output
     require 'ipaddr'
     super
   end
-  
+
   def configure(conf)
     super
 
@@ -41,7 +41,7 @@ class Fluent::AnonymizerOutput < Fluent::Output
       hash_algorithm_name = key.sub('_keys','')
       raise Fluent::ConfigError, "anonymizer: unsupported key #{hash_algorithm_name}" unless HASH_ALGORITHM.include?(hash_algorithm_name)
       conf[key].gsub(' ', '').split(',').each do |record_key|
-        @hash_keys.store(record_key, hash_algorithm_name)
+        @hash_keys.store(record_key.split('.'), hash_algorithm_name)
       end
     end
 
@@ -58,8 +58,7 @@ class Fluent::AnonymizerOutput < Fluent::Output
   def emit(tag, es, chain)
     es.each do |time, record|
       @hash_keys.each do |hash_key, hash_algorithm|
-        next unless record.include?(hash_key)
-        record[hash_key] = filter_anonymize_record(record[hash_key], hash_algorithm)
+        record = filter_anonymize_record(record, hash_key, hash_algorithm)
       end
       emit_tag = tag.dup
       filter_record(emit_tag, time, record)
@@ -68,8 +67,18 @@ class Fluent::AnonymizerOutput < Fluent::Output
     chain.next
   end
 
+  def filter_anonymize_record(record, key, hash_algorithm)
+    if record.has_key?(key.first)
+      if key.size == 1
+        record[key.first] = filter_anonymize_value(record[key.first], hash_algorithm)
+      else
+        record[key.first] = filter_anonymize_record(record[key.first], key[1..-1], hash_algorithm)
+      end
+    end
+    return record
+  end
 
-  def filter_anonymize_record(data, hash_algorithm)
+  def filter_anonymize_value(data, hash_algorithm)
     begin
       if data.is_a?(Array)
         data = data.collect { |v| anonymize(v, hash_algorithm, @hash_salt) }
