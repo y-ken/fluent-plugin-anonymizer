@@ -10,7 +10,8 @@ class Fluent::AnonymizerOutput < Fluent::Output
 
   HASH_ALGORITHM = %w(md5 sha1 sha256 sha384 sha512 ipaddr_mask)
   config_param :tag, :string, :default => nil
-  config_param :hash_salt, :string, :default => ''
+  config_param :hash_salt, :string, :default => nil
+  config_param :hash_salt_path, :string, :default => nil
   config_param :ipv4_mask_subnet, :integer, :default => 24
   config_param :ipv6_mask_subnet, :integer, :default => 104
 
@@ -35,6 +36,8 @@ class Fluent::AnonymizerOutput < Fluent::Output
 
   def configure(conf)
     super
+
+    configure_hash_salt
 
     @hash_keys = Hash.new
     conf.keys.select{|k| k =~ /_keys$/}.each do |key|
@@ -103,6 +106,44 @@ class Fluent::AnonymizerOutput < Fluent::Output
     else
       log.warn "anonymizer: unknown algorithm #{algorithm} has called."
     end
+  end
+
+  private
+  def configure_hash_salt
+    @hash_salt ||= read_hash_salt || ""
+  end
+
+  def read_hash_salt
+    return nil unless @hash_salt_path
+
+    ensure_hash_salt_file
+    File.open(@hash_salt_path, 'rb') do |file|
+      file.read
+    end
+  end
+
+  def ensure_hash_salt_file
+    return if File.exist?(@hash_salt_path)
+
+    ensure_directory(File.dirname(@hash_salt_path))
+
+    require 'securerandom'
+    salt = SecureRandom.hex
+    File.open(@hash_salt_path, 'wb', 0600) do |file|
+      file.print(salt)
+    end
+  end
+
+  def ensure_directory(path)
+    return if File.directory?(path)
+
+    require 'fileutils'
+    if defined?(Fluent::DEFAULT_DIR_PERMISSION)
+      permission = Fluent::DEFAULT_DIR_PERMISSION
+    else
+      permission = 0644
+    end
+    FileUtils.mkdir_p(path, :mode => permission)
   end
 end
 

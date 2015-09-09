@@ -36,6 +36,13 @@ It is a sample to hash record with sha1 for `user_id`, `member_id` and `mail`. F
   
   # Set hash salt with any strings for more security
   hash_salt         mysaltstring
+  # Put hash salt into file for security. You can't use this parameter with
+  # "hash_salt" option. If both are used, "hash_salt" parameter is used.
+  # You can use different permission for Fluentd configuration file
+  # and hash salt file.
+  # If the file doesn't exist, random hash salt is generated automatically
+  # and saved into the file.
+  # hash_salt_path  /etc/fluentd/anonymizer-salt.txt
   
   # Specify rounding address keys with comma and subnet mask
   ipaddr_mask_keys  host
@@ -74,6 +81,13 @@ Specify which hash algorithm to be used for following one or more keys.
 This salt affects for `md5_keys` `sha1_keys` `sha256_keys` `sha384_keys` `sha512_keys` settings.  
 It is recommend to set a hash salt to prevent rainbow table attacks.
 
+* `hash_salt_path` (default: none)
+
+Read hash salt from file at the path. You can use different permission for Fluentd configuration file and the hash salt file path for security.
+
+If the path doesn't exist, random hash salt is generated automatically and saved into file at the path.
+
+You can use this parameter with `hash_salt` parameter. If you specify both parameters, `hash_salt` parameter is used.
 
 * `ipaddr_mask_keys`
 * `ipv4_mask_subnet` (default: 24)

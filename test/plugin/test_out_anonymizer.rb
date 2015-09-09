@@ -1,4 +1,6 @@
 require 'helper'
+require 'tempfile'
+require 'fileutils'
 
 class AnonymizerOutputTest < Test::Unit::TestCase
   def setup
@@ -31,6 +33,34 @@ class AnonymizerOutputTest < Test::Unit::TestCase
     }
     d = create_driver(CONFIG)
     assert_equal 'test_salt_string', d.instance.config['hash_salt']
+  end
+
+  def test_configure_hash_salt_path_existent
+    salt = 'salt'
+    file = Tempfile.new('test_out_anonymoizer')
+    file.print(salt)
+    file.close
+    d = create_driver(<<-CONFIG)
+      sha512_keys       data_for_sha512
+      hash_salt_path    #{file.path}
+      remove_tag_prefix input.
+    CONFIG
+    assert_equal salt, d.instance.instance_variable_get(:@hash_salt)
+  end
+
+  def test_configure_hash_salt_path_nonexistent
+    file = Tempfile.new('test_out_anonymoizer')
+    FileUtils.rm_f(file.path)
+    d = create_driver(<<-CONFIG)
+      sha512_keys       data_for_sha512
+      hash_salt_path    #{file.path}
+      remove_tag_prefix input.
+    CONFIG
+    salt = File.open(file.path, 'rb') do |file|
+      file.read
+    end
+    assert_not_equal '', salt
+    assert_equal salt, d.instance.instance_variable_get(:@hash_salt)
   end
 
   def test_emit
