@@ -23,6 +23,7 @@ unless ENV.has_key?('VERBOSE')
 end
 
 require 'fluent/plugin/out_anonymizer'
+require 'fluent/plugin/filter_anonymizer'
 
 class Test::Unit::TestCase
 end
