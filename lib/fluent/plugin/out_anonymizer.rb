@@ -8,6 +8,11 @@ class Fluent::AnonymizerOutput < Fluent::Output
     define_method(:log) { $log }
   end
 
+  # Define `router` method of v0.12 to support v0.10 or earlier
+  unless method_defined?(:router)
+    define_method("router") { Fluent::Engine }
+  end
+
   config_param :tag, :string, :default => nil
   config_param :hash_salt, :string, :default => ''
   config_param :ipv4_mask_subnet, :integer, :default => 24
@@ -33,9 +38,8 @@ class Fluent::AnonymizerOutput < Fluent::Output
       record = @anonymizer.anonymize(record)
       emit_tag = tag.dup
       filter_record(emit_tag, time, record)
-      Fluent::Engine.emit(emit_tag, time, record)
+      router.emit(emit_tag, time, record)
     end
     chain.next
   end
 end
-
