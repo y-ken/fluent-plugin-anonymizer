@@ -2,8 +2,6 @@ module Fluent
   class AnonymizerFilter < Filter
     Plugin.register_filter('anonymizer', self)
 
-    config_param :tag, :string, :default => nil,
-                 :desc => 'The output tag.'
     config_param :hash_salt, :string, :default => '',
                  :desc => <<-DESC
 This salt affects for md5_keys sha1_keys sha256_keys sha384_keys sha512_keys settings.
