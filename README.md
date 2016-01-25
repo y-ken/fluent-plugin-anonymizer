@@ -26,12 +26,12 @@ It is a sample to hash record with sha1 for `user_id`, `member_id` and `mail`. F
 
 `````
 <source>
-  type forward
+  @type forward
   port 24224
 </source>
 
 <match test.message>
-  type anonymizer
+  @type anonymizer
   
   # Specify hashing keys with comma
   sha1_keys         user_id, member_id, mail
@@ -50,7 +50,7 @@ It is a sample to hash record with sha1 for `user_id`, `member_id` and `mail`. F
 </match>
 
 <match anonymized.message>
-  type stdout
+  @type stdout
 </match>
 `````
 
@@ -71,7 +71,7 @@ $ tail -f /var/log/td-agent/td-agent.log
 
 ```text
 <source>
-  type dummy
+  @type dummy
   tag raw.dummy
   dummy [
   {"host":"10.102.3.80","member_id":"12345", "mail":"example@example.com"},
@@ -80,7 +80,7 @@ $ tail -f /var/log/td-agent/td-agent.log
 </source>
 
 <filter raw.**>
-  type anonymizer
+  @type anonymizer
 
   # Specify hashing keys with comma
   sha1_keys         user_id, member_id, mail
@@ -95,7 +95,7 @@ $ tail -f /var/log/td-agent/td-agent.log
 </filter>
 
 <match raw.**>
-  type stdout
+  @type stdout
 </match>
  ```
 
