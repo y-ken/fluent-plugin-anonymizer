@@ -1,0 +1,57 @@
+PATH
+  remote: ../
+  specs:
+    fluent-plugin-anonymizer (0.4.1)
+      fluent-mixin-rewrite-tag-name
+      fluentd
+
+GEM
+  remote: http://rubygems.org/
+  specs:
+    appraisal (2.1.0)
+      bundler
+      rake
+      thor (>= 0.14.0)
+    cool.io (1.4.3)
+    fluent-mixin-rewrite-tag-name (0.1.0)
+      fluentd
+    fluentd (0.12.20)
+      cool.io (>= 1.2.2, < 2.0.0)
+      http_parser.rb (>= 0.5.1, < 0.7.0)
+      json (>= 1.4.3)
+      msgpack (>= 0.5.11, < 0.6.0)
+      sigdump (~> 0.2.2)
+      string-scrub (>= 0.0.3)
+      tzinfo (>= 1.0.0)
+      tzinfo-data (>= 1.0.0)
+      yajl-ruby (~> 1.0)
+    http_parser.rb (0.6.0)
+    json (1.8.3)
+    msgpack (0.5.12)
+    power_assert (0.2.7)
+    rake (10.5.0)
+    sigdump (0.2.3)
+    string-scrub (0.0.5)
+    test-unit (3.1.7)
+      power_assert
+    thor (0.19.1)
+    thread_safe (0.3.5)
+    tzinfo (1.2.2)
+      thread_safe (~> 0.1)
+    tzinfo-data (1.2015.7)
+      tzinfo (>= 1.0.0)
+    yajl-ruby (1.2.1)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  appraisal
+  bundler
+  fluent-plugin-anonymizer!
+  fluentd (~> 0.10)
+  rake
+  test-unit (~> 3)
+
+BUNDLED WITH
+   1.11.2
