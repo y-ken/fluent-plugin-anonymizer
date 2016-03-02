@@ -8,7 +8,7 @@ require 'ipaddr'
 #   # salts will be selected for field names in a deterministic way
 #   salt secret_salt # different salt for each fields?
 #   salt salt_brabra
-#   salts s1,s2,s3,s4
+#   salts ["s1","s2","s3","s4"]
 #   <mask sha1>
 #     # key user_id
 #     keys ["user_id","session_id","source_ip"]
@@ -66,14 +66,8 @@ module Fluent
         } },
     }
 
-    config_param :salt, default: nil do |value|
-      @salt_list << value.strip.to_s
-    end
-    config_param :salts, default: nil do |values|
-      values.split(',').map(&:strip).each do |value|
-        @salt_list << value
-      end
-    end
+    config_param :salt, :string, default: nil
+    config_param :salts, :array, default: nil
     config_section :mask, param_name: :mask_config_list, required: false, multi: true do
       config_argument :method, :enum, list: MASK_METHODS.keys
       config_param :salt, :string, default: nil
@@ -113,6 +107,9 @@ module Fluent
       super
 
       salt_missing = false
+
+      @salt_list << @salt
+      @salt_list += @salts if @salts
 
       @masks = []
       @mask_config_list.each do |c|
@@ -191,7 +188,7 @@ module Fluent
       if keystr.empty?
         @salt_map[key] = @salt_list[0]
       else
-        @salt_map[key] = @salt_list[(keystr[0].ord + keystr[-1].ord) % @salt_map.size]
+        @salt_map[key] = @salt_list[(keystr[0].ord + keystr[-1].ord) % @salt_list.size]
       end
       @salt_map[key]
     end
@@ -208,16 +205,30 @@ module Fluent
 
     def masker_for_key(conv, key, opts)
       for_each = opts.mask_array_elements
-      ->(record){
-        begin
-          if record.has_key?(key)
-            record[key] = mask_value(record[key], for_each){|v| conv.call(v, opts.salt || salt_determine(key)) }
+      salt = opts.salt || salt_determine(key)
+      if for_each
+        ->(record){
+          begin
+            if record.has_key?(key)
+              record[key] = mask_value(record[key], for_each){|v| conv.call(v, salt) }
+            end
+          rescue => e
+            log.error "unexpected error while masking value", error_class: e.class, error: e.message
           end
-        rescue => e
-          log.error "unexpected error while masking value", error_class: e.class, error: e.message
-        end
-        record
-      }
+          record
+        }
+      else
+        ->(record){
+          begin
+            if record.has_key?(key)
+              record[key] = conv.call(record[key], salt)
+            end
+          rescue => e
+            log.error "unexpected error while masking value", error_class: e.class, error: e.message
+          end
+          record
+        }
+      end
     end
 
     def masker_for_key_chain(conv, key_chain, opts)
