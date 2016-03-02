@@ -119,9 +119,9 @@ class AnonymizerFilterTest < Test::Unit::TestCase
         'host1' => '10.102.0.0'
       },
       'nested' => {
-        'data' => '774472f0dc892f0b3299cae8dadacd0a74ba59d7',
+        'data' => '8cb2237d0679ca88db6464eac60da96345513964',
         'nested' => {
-          'data' => '774472f0dc892f0b3299cae8dadacd0a74ba59d7'
+          'data' => '8cb2237d0679ca88db6464eac60da96345513964'
         }
       }
     }
@@ -143,8 +143,8 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     ]
     expected = {
       'host' => '10.102.3.0',
-      'array' => ["c1628fc0d473cb21b15607c10bdcad19d1a42e24", "ea87abc249f9f2d430edb816514bffeffd3e698e"],
-      'hash' => '28fe85deb0d1d39ee14c49c62bc4773b0338247b'
+      'array' => ["e3cbba8883fe746c6e35783c9404b4bc0c7ee9eb", "a4ac914c09d7c097fe1f4f96b897e625b6922069"],
+      'hash' => '1a1903d78aed9403649d61cb21ba6b489249761b'
     }
     filtered = filter(conf, messages)
     assert_equal(expected, filtered[0])

@@ -132,8 +132,8 @@ class AnonymizerOutputTest < Test::Unit::TestCase
     assert_equal 1, emits.length
     assert_equal 'anonymized.access', emits[0][0] # tag
     assert_equal '10.102.3.0', emits[0][2]['host']
-    assert_equal ["c1628fc0d473cb21b15607c10bdcad19d1a42e24", "ea87abc249f9f2d430edb816514bffeffd3e698e"], emits[0][2]['array']
-    assert_equal '28fe85deb0d1d39ee14c49c62bc4773b0338247b', emits[0][2]['hash']
+    assert_equal ["e3cbba8883fe746c6e35783c9404b4bc0c7ee9eb", "a4ac914c09d7c097fe1f4f96b897e625b6922069"], emits[0][2]['array']
+    assert_equal '1a1903d78aed9403649d61cb21ba6b489249761b', emits[0][2]['hash']
   end
 
   def test_emit_ipv6
