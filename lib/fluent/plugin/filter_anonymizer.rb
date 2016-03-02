@@ -78,12 +78,13 @@ module Fluent
       config_argument :method, :enum, list: MASK_METHODS.keys
       config_param :salt, :string, default: nil
 
-      config_param :key, :string, default: nil
-      config_param :keys, :array, default: []
-      config_param :key_pattern, :string, default: nil
-      config_param :value_pattern, :string, default: nil
+      config_param :key,             :string, default: nil
+      config_param :keys,            :array,  default: []
+      config_param :key_pattern,     :string, default: nil
+      config_param :value_pattern,   :string, default: nil
       config_param :value_in_subnet, :string, default: nil # 192.168.0.0/24
 
+      config_param :mask_array_elements, :bool, default: false
       config_param :ipv4_mask_bits, :integer, default: nil
       config_param :ipv6_mask_bits, :integer, default: nil
     end
@@ -119,30 +120,38 @@ module Fluent
 
         conv = MASK_METHODS[c.method].call(c)
         [c.key || nil, *c.keys].compact.each do |key|
-          @masks << masker_for_key(conv, key, c.salt)
+          @masks << masker_for_key(conv, key, c)
         end
-        @masks << masker_for_key_pattern(conv, c.key_pattern, c.salt) if c.key_pattern
-        @masks << masker_for_value_pattern(conv, c.value_pattern, c.salt) if c.value_pattern
-        @masks << masker_for_value_in_subnet(conv, c.value_in_subnet, c.salt) if c.value_in_subnet
+        @masks << masker_for_key_pattern(conv, c.key_pattern, c) if c.key_pattern
+        # TODO: masker_for_key_chains
+        @masks << masker_for_value_pattern(conv, c.value_pattern, c) if c.value_pattern
+        @masks << masker_for_value_in_subnet(conv, c.value_in_subnet, c) if c.value_in_subnet
       end
 
       # obsolete option handling
       [[@md5_keys,:md5],[@sha1_keys,:sha1],[@sha256_keys,:sha256],[@sha384_keys,:sha384],[@sha512_keys,:sha512]].each do |param,m|
         next unless param
-        @salt_list << (@hash_salt || '') if @salt_list.empty?
-        conv = MASK_METHODS[m].call(OpenStruct.new)
+        @salt_list << (@hash_salt || '') if @salt_list.empty? # to suppress ConfigError for salt missing
+        conf = OpenStruct.new
+        conf.salt = @hash_salt || ''
+        conf.mask_array_elements = true
+        conv = MASK_METHODS[m].call(conf)
         param.split(',').map(&:strip).each do |key|
-          @masks << masker_for_key(conv, key, @hash_salt || '')
+          # TODO: fix to use masker_for_key_chains
+          @masks << masker_for_key(conv, key, conf)
         end
       end
       if @ipaddr_mask_keys
-        @salt_list << (@hash_salt || '') if @salt_list.empty?
+        @salt_list << (@hash_salt || '') if @salt_list.empty? # to suppress ConfigError for salt missing
         conf = OpenStruct.new
+        conf.salt = @hash_salt || ''
+        conf.mask_array_elements = true
         conf.ipv4_mask_bits = @ipv4_mask_subnet
         conf.ipv6_mask_bits = @ipv6_mask_subnet
         conv = MASK_METHODS[:network].call(conf)
         @ipaddr_mask_keys.split(',').map(&:strip).each do |key|
-          @masks << masker_for_key(conv, key, @hash_salt || '')
+          # TODO: fix to use masker_for_key_chains
+          @masks << masker_for_key(conv, key, conf)
         end
       end
 
@@ -177,11 +186,22 @@ module Fluent
       @salt_map[key]
     end
 
-    def masker_for_key(conv, key, salt)
+    def mask_value(value, for_each)
+      if for_each && value.is_a?(Array)
+        value.map{|v|
+          yield v
+        }
+      else
+        yield value
+      end
+    end
+
+    def masker_for_key(conv, key, opts)
+      for_each = opts.mask_array_elements
       ->(record){
         begin
           if record.has_key?(key)
-            record[key] = conv.call(record[key], salt || salt_determine(key))
+            record[key] = mask_value(record[key], for_each){|v| conv.call(v, opts.salt || salt_determine(key)) }
           end
         rescue => e
           log.error "unexpected error while masking value", error_class: e.class, error: e.message
@@ -190,13 +210,14 @@ module Fluent
       }
     end
 
-    def masker_for_key_pattern(conv, pattern, salt)
+    def masker_for_key_pattern(conv, pattern, opts)
+      for_each = opts.mask_array_elements
       regexp = Regexp.new(pattern)
       -> (record){
         begin
           record.each_pair do |key, value|
             next unless (regexp =~ key.to_s rescue nil)
-            record[key] = conv.call(value, salt || salt_determine(key))
+            record[key] = mask_value(record[key], for_each){|v| conv.call(v, opts.salt || salt_determine(key)) }
           end
         rescue => e
           log.error "unexpected error while masking value", error_class: e.class, error: e.message
@@ -205,13 +226,13 @@ module Fluent
       }
     end
 
-    def masker_for_value_pattern(conv, pattern, salt)
+    def masker_for_value_pattern(conv, pattern, opts)
       regexp = Regexp.new(pattern)
       -> (record){
         begin
           record.each_pair do |key, value|
             next unless (regexp =~ value.to_s rescue nil)
-            record[key] = conv.call(value, salt || salt_determine(key))
+            record[key] = conv.call(value, opts.salt || salt_determine(key))
           end
         rescue => e
           log.error "unexpected error while masking value", error_class: e.class, error: e.message
@@ -220,13 +241,13 @@ module Fluent
       }
     end
 
-    def masker_for_value_in_subnet(conv, network_str, salt)
+    def masker_for_value_in_subnet(conv, network_str, opts)
       network = IPAddr.new(network_str)
       ->(record){
         begin
           record.each_pair do |key, value|
             next unless (network.include?(value) rescue nil)
-            record[key] = conv.call(value, salt || salt_determine(key))
+            record[key] = conv.call(value, opts.salt || salt_determine(key))
           end
         rescue => e
           log.error "unexpected error while masking value", error_class: e.class, error: e.message

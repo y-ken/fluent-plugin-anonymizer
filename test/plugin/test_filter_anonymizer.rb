@@ -92,9 +92,10 @@ class AnonymizerFilterTest < Test::Unit::TestCase
   end
 
   test 'masker_for_key generates a lambda for conversion with exact key match' do
+    conf = OpenStruct.new(salt: 's')
     plugin = create_driver.instance
     conv = ->(v,salt){ "#{v.upcase}:#{salt}" } # it's dummy for test
-    masker = plugin.masker_for_key(conv, 'kkk', 's')
+    masker = plugin.masker_for_key(conv, 'kkk', conf)
     r = masker.call({"k" => "x", "kk" => "xx", "kkk" => "xxx", "kkkk" => "xxxx"})
     assert_equal "x", r["k"]
     assert_equal "xx", r["kk"]
@@ -104,9 +105,10 @@ class AnonymizerFilterTest < Test::Unit::TestCase
   end
 
   test 'masker_for_key_pattern generates a lambda for conversion with key pattern match' do
+    conf = OpenStruct.new(salt: 's')
     plugin = create_driver.instance
     conv = ->(v,salt){ "#{v.upcase}:#{salt}" } # it's dummy for test
-    masker = plugin.masker_for_key_pattern(conv, '^k+$', 's')
+    masker = plugin.masker_for_key_pattern(conv, '^k+$', conf)
     r = masker.call({"k" => "x", "kk" => "xx", "kkk" => "xxx", "kkk0" => "xxxx", "f" => "x", "ff" => "xx"})
     assert_equal "X:s", r["k"]
     assert_equal "XX:s", r["kk"]
@@ -118,9 +120,10 @@ class AnonymizerFilterTest < Test::Unit::TestCase
   end
 
   test 'masker_for_value_pattern' do
+    conf = OpenStruct.new(salt: 's')
     plugin = create_driver.instance
     conv = ->(v,salt){ "#{v.upcase}:#{salt}" } # it's dummy for test
-    masker = plugin.masker_for_value_pattern(conv, '^x+$', 's')
+    masker = plugin.masker_for_value_pattern(conv, '^x+$', conf)
     r = masker.call({"k" => "x", "kk" => "x0", "kkk" => "xx0", "kkk0" => "xxxx", "f" => "x", "ff" => "xx"})
     assert_equal "X:s", r["k"]
     assert_equal "x0", r["kk"]
@@ -132,9 +135,10 @@ class AnonymizerFilterTest < Test::Unit::TestCase
   end
 
   test 'masker_for_value_in_subnet' do
+    conf = OpenStruct.new(salt: 's')
     plugin = create_driver.instance
     conv = ->(v,salt){ "#{v.upcase}:#{salt}" } # it's dummy for test
-    masker = plugin.masker_for_value_in_subnet(conv, '192.168.0.0/16', 's')
+    masker = plugin.masker_for_value_in_subnet(conv, '192.168.0.0/16', conf)
     r = masker.call({"k1" => "x", "k2" => "192.169.1.1", "k3" => "192.168.128.13", "f1" => "x", "f2" => "10.0.12.1", "f3" => "192.168.1.1"})
     assert_equal "x", r["k1"]
     assert_equal "192.169.1.1", r["k2"]
