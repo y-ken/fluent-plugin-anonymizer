@@ -80,6 +80,8 @@ module Fluent
 
       config_param :key,             :string, default: nil
       config_param :keys,            :array,  default: []
+      config_param :key_chain,       :string, default: nil # for.nested.key
+      config_param :key_chains,      :array,  default: []  # ["for.nested.key","can.be.specified","twice.or.more"]
       config_param :key_pattern,     :string, default: nil
       config_param :value_pattern,   :string, default: nil
       config_param :value_in_subnet, :string, default: nil # 192.168.0.0/24
@@ -122,8 +124,10 @@ module Fluent
         [c.key || nil, *c.keys].compact.each do |key|
           @masks << masker_for_key(conv, key, c)
         end
+        [c.key_chain || nil, *c.key_chains].compact.each do |key_chain|
+          @masks << masker_for_key_chain(conv, key_chain.split('.'), c)
+        end
         @masks << masker_for_key_pattern(conv, c.key_pattern, c) if c.key_pattern
-        # TODO: masker_for_key_chains
         @masks << masker_for_value_pattern(conv, c.value_pattern, c) if c.value_pattern
         @masks << masker_for_value_in_subnet(conv, c.value_in_subnet, c) if c.value_in_subnet
       end
@@ -137,8 +141,11 @@ module Fluent
         conf.mask_array_elements = true
         conv = MASK_METHODS[m].call(conf)
         param.split(',').map(&:strip).each do |key|
-          # TODO: fix to use masker_for_key_chains
-          @masks << masker_for_key(conv, key, conf)
+          if key.include?('.')
+            @masks << masker_for_key_chain(conv, key.split('.'), conf)
+          else
+            @masks << masker_for_key(conv, key, conf)
+          end
         end
       end
       if @ipaddr_mask_keys
@@ -150,8 +157,11 @@ module Fluent
         conf.ipv6_mask_bits = @ipv6_mask_subnet
         conv = MASK_METHODS[:network].call(conf)
         @ipaddr_mask_keys.split(',').map(&:strip).each do |key|
-          # TODO: fix to use masker_for_key_chains
-          @masks << masker_for_key(conv, key, conf)
+          if key.include?('.')
+            @masks << masker_for_key_chain(conv, key.split('.'), conf)
+          else
+            @masks << masker_for_key(conv, key, conf)
+          end
         end
       end
 
@@ -202,6 +212,24 @@ module Fluent
         begin
           if record.has_key?(key)
             record[key] = mask_value(record[key], for_each){|v| conv.call(v, opts.salt || salt_determine(key)) }
+          end
+        rescue => e
+          log.error "unexpected error while masking value", error_class: e.class, error: e.message
+        end
+        record
+      }
+    end
+
+    def masker_for_key_chain(conv, key_chain, opts)
+      for_each = opts.mask_array_elements
+      heading = key_chain[0..-2]
+      container_fetcher = ->(record){ heading.reduce(record){|r,c| r && r.has_key?(c) ? r[c] : nil } }
+      tailing = key_chain[-1]
+      ->(record) {
+        begin
+          container = container_fetcher.call(record)
+          if container && container.has_key?(tailing)
+            container[tailing] = mask_value(container[tailing], for_each){|v| conv.call(v, opts.salt || salt_determine(tailing)) }
           end
         rescue => e
           log.error "unexpected error while masking value", error_class: e.class, error: e.message

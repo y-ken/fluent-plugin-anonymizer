@@ -104,6 +104,21 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     assert_equal 4, r.size
   end
 
+  test 'masker_for_key_chain generates a lambda for conversion with recursive key fetching' do
+    conf = OpenStruct.new(salt: 's')
+    plugin = create_driver.instance
+    conv = ->(v,salt){ "#{v.upcase}:#{salt}" } # it's dummy for test
+    masker = plugin.masker_for_key_chain(conv, 'a.b.c'.split('.'), conf)
+    event = {
+      'a' => {
+        'b' => { 'c' => 'v', 'd' => 'v' }
+      }
+    }
+    r = masker.call(event)
+    assert_equal 'V:s', r['a']['b']['c']
+    assert_equal 'v', r['a']['b']['d']
+  end
+
   test 'masker_for_key_pattern generates a lambda for conversion with key pattern match' do
     conf = OpenStruct.new(salt: 's')
     plugin = create_driver.instance
