@@ -236,7 +236,7 @@ module Fluent
       heading = key_chain[0..-2]
       container_fetcher = ->(record){ heading.reduce(record){|r,c| r && r.has_key?(c) ? r[c] : nil } }
       tailing = key_chain[-1]
-      ->(record) {
+      ->(record){
         begin
           container = container_fetcher.call(record)
           if container && container.has_key?(tailing)
@@ -252,7 +252,7 @@ module Fluent
     def masker_for_key_pattern(conv, pattern, opts)
       for_each = opts.mask_array_elements
       regexp = Regexp.new(pattern)
-      -> (record){
+      ->(record){
         begin
           record.each_pair do |key, value|
             next unless (regexp =~ key.to_s rescue nil)
@@ -267,7 +267,7 @@ module Fluent
 
     def masker_for_value_pattern(conv, pattern, opts)
       regexp = Regexp.new(pattern)
-      -> (record){
+      ->(record){
         begin
           record.each_pair do |key, value|
             next unless (regexp =~ value.to_s rescue nil)
