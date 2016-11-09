@@ -2,7 +2,7 @@
 
 ## Overview
 
-Fluentd filter output plugin to anonymize records with [OpenSSL::HMAC](http://docs.ruby-lang.org/ja/1.9.3/class/OpenSSL=3a=3aHMAC.html) of MD5/SHA1/SHA256/SHA384/SHA512 algorithms. This data masking plugin protects privacy data such as UserID, Email, Phone number, IPv4/IPv6 address and so on.
+Fluentd filter output plugin to anonymize records with [OpenSSL::Digest](https://docs.ruby-lang.org/ja/latest/class/OpenSSL=3a=3aDigest.html) of MD5/SHA1/SHA256/SHA384/SHA512 algorithms. This data masking plugin protects privacy data such as UserID, Email, Phone number, IPv4/IPv6 address and so on.
 
 ## Installation
 
