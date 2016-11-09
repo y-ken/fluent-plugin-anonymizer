@@ -16,3 +16,8 @@ gemfile:
   - Gemfile
   - gemfiles/fluentd_v0.10.gemfile
   - gemfiles/fluentd_v0.12.gemfile
+
+matrix:
+  allow_failures:
+    - rvm: 1.9.3
+    - rvm: 2.0.0
