@@ -49,11 +49,11 @@ class AnonymizerOutputTest < Test::Unit::TestCase
     assert_equal 1, emits.length
     assert_equal 'anonymized.access', emits[0][0] # tag
     assert_equal '10.102.3.0', emits[0][2]['host']
-    assert_equal 'e738cbde82a514dc60582cd467c240ed', emits[0][2]['data_for_md5']
-    assert_equal '69cf099459c06b852ede96d39b710027727d13c6', emits[0][2]['data_for_sha1']
-    assert_equal '804d83b8c6a3e01498d40677652b084333196d8e548ee5a8710fbd0e1e115527', emits[0][2]['data_for_sha256']
-    assert_equal '6c90c389bbdfc210416b9318df3f526b4f218f8a8df3a67020353c35da22dc154460b18f22a8009a747b3ef2975acae7', emits[0][2]['data_for_sha384']
-    assert_equal 'cdbb897e6f3a092161bdb51164eb2996b75b00555f568219628ff15cd2929865d217af5dff9c32ddc908b75a89baec96b3e9a0da120e919f5246de0f1bc54c58', emits[0][2]['data_for_sha512']
+    assert_equal '9138bd41172f5485f7b6eee3afcd0d62', emits[0][2]['data_for_md5']
+    assert_equal 'ee98db51658d38580b1cf788db19ad06e51a32f7', emits[0][2]['data_for_sha1']
+    assert_equal 'd53d15615b19597b0f95a984a132ed5164ba9676bf3cb28e018d28feaa2ea6fd', emits[0][2]['data_for_sha256']
+    assert_equal '6e9cd6d84ea371a72148b418f1a8cb2534da114bc2186d36ec6f14fd5c237b6f2e460f409dda89b7e42a14b7da8a8131', emits[0][2]['data_for_sha384']
+    assert_equal 'adcf4e5d1e52f57f67d8b0cd85051158d7362103d7ed4cb6302445c2708eff4b17cb309cf5d09fd5cf76615c75652bd29d1707ce689a28e8700afd7a7439ef20', emits[0][2]['data_for_sha512']
   end
 
   def test_emit_multi_keys
@@ -79,9 +79,9 @@ class AnonymizerOutputTest < Test::Unit::TestCase
     assert_equal 'anonymized.access', emits[0][0] # tag
     assert_equal '10.102.0.0', emits[0][2]['host']
     assert_equal '10.102.0.0', emits[0][2]['host2']
-    assert_equal '774472f0dc892f0b3299cae8dadacd0a74ba59d7', emits[0][2]['member_id']
-    assert_equal 'd7b728209f5dd8df10cecbced30394c3c7fc2c82', emits[0][2]['mail']
-    assert_equal 'a67f73c395105a358a03a0f127bf64b5495e7841', emits[0][2]['telephone']
+    assert_equal '8cb2237d0679ca88db6464eac60da96345513964', emits[0][2]['member_id']
+    assert_equal '914fec35ce8bfa1a067581032f26b053591ee38a', emits[0][2]['mail']
+    assert_equal 'ce164718b94212332187eb8420903b46b334d609', emits[0][2]['telephone']
     assert_equal 'signup', emits[0][2]['action']
   end
 
@@ -110,8 +110,8 @@ class AnonymizerOutputTest < Test::Unit::TestCase
     assert_equal 1, emits.length
     assert_equal 'anonymized.access', emits[0][0] # tag
     assert_equal '10.102.0.0', emits[0][2]['hosts']['host1']
-    assert_equal '774472f0dc892f0b3299cae8dadacd0a74ba59d7', emits[0][2]['nested']['data']
-    assert_equal '774472f0dc892f0b3299cae8dadacd0a74ba59d7', emits[0][2]['nested']['nested']['data']
+    assert_equal '8cb2237d0679ca88db6464eac60da96345513964', emits[0][2]['nested']['data']
+    assert_equal '8cb2237d0679ca88db6464eac60da96345513964', emits[0][2]['nested']['nested']['data']
   end
 
   def test_emit_nest_value
@@ -132,8 +132,8 @@ class AnonymizerOutputTest < Test::Unit::TestCase
     assert_equal 1, emits.length
     assert_equal 'anonymized.access', emits[0][0] # tag
     assert_equal '10.102.3.0', emits[0][2]['host']
-    assert_equal ["c1628fc0d473cb21b15607c10bdcad19d1a42e24", "ea87abc249f9f2d430edb816514bffeffd3e698e"], emits[0][2]['array']
-    assert_equal '28fe85deb0d1d39ee14c49c62bc4773b0338247b', emits[0][2]['hash']
+    assert_equal ["e3cbba8883fe746c6e35783c9404b4bc0c7ee9eb", "a4ac914c09d7c097fe1f4f96b897e625b6922069"], emits[0][2]['array']
+    assert_equal '1a1903d78aed9403649d61cb21ba6b489249761b', emits[0][2]['hash']
   end
 
   def test_emit_ipv6
@@ -170,7 +170,7 @@ class AnonymizerOutputTest < Test::Unit::TestCase
     emits = d1.emits
     assert_equal 1, emits.length
     assert_equal 'anonymized.message', emits[0][0] # tag
-    assert_equal '774472f0dc892f0b3299cae8dadacd0a74ba59d7', emits[0][2]['member_id']
+    assert_equal '8cb2237d0679ca88db6464eac60da96345513964', emits[0][2]['member_id']
   end
 
   def test_emit_tag_placeholder
@@ -187,7 +187,7 @@ class AnonymizerOutputTest < Test::Unit::TestCase
     emits = d1.emits
     assert_equal 1, emits.length
     assert_equal 'anonymized.access', emits[0][0] # tag
-    assert_equal '774472f0dc892f0b3299cae8dadacd0a74ba59d7', emits[0][2]['member_id']
+    assert_equal '8cb2237d0679ca88db6464eac60da96345513964', emits[0][2]['member_id']
   end
 end
 

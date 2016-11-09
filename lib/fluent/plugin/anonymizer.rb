@@ -79,7 +79,7 @@ module Fluent
     def anonymize_value(message, algorithm, salt)
       case algorithm
       when 'md5','sha1','sha256','sha384','sha512'
-        OpenSSL::HMAC.hexdigest(DIGEST[algorithm].call, salt, message.to_s)
+        DIGEST[algorithm].call.update(salt).update(message.to_s).hexdigest
       when 'ipaddr_mask'
         address = IPAddr.new(message)
         subnet = address.ipv4? ? @ipv4_mask_subnet : @ipv6_mask_subnet

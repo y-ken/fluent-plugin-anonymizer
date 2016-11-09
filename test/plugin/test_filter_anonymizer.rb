@@ -57,11 +57,11 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     ]
     expected = {
       'host'            => '10.102.3.0',
-      'data_for_md5'    => 'e738cbde82a514dc60582cd467c240ed',
-      'data_for_sha1'   => '69cf099459c06b852ede96d39b710027727d13c6',
-      'data_for_sha256' => '804d83b8c6a3e01498d40677652b084333196d8e548ee5a8710fbd0e1e115527',
-      'data_for_sha384' => '6c90c389bbdfc210416b9318df3f526b4f218f8a8df3a67020353c35da22dc154460b18f22a8009a747b3ef2975acae7',
-      'data_for_sha512' => 'cdbb897e6f3a092161bdb51164eb2996b75b00555f568219628ff15cd2929865d217af5dff9c32ddc908b75a89baec96b3e9a0da120e919f5246de0f1bc54c58'
+      'data_for_md5'    => '9138bd41172f5485f7b6eee3afcd0d62',
+      'data_for_sha1'   => 'ee98db51658d38580b1cf788db19ad06e51a32f7',
+      'data_for_sha256' => 'd53d15615b19597b0f95a984a132ed5164ba9676bf3cb28e018d28feaa2ea6fd',
+      'data_for_sha384' => '6e9cd6d84ea371a72148b418f1a8cb2534da114bc2186d36ec6f14fd5c237b6f2e460f409dda89b7e42a14b7da8a8131',
+      'data_for_sha512' => 'adcf4e5d1e52f57f67d8b0cd85051158d7362103d7ed4cb6302445c2708eff4b17cb309cf5d09fd5cf76615c75652bd29d1707ce689a28e8700afd7a7439ef20'
     }
     filtered = filter(CONFIG, messages)
     assert_equal(expected, filtered[0])
@@ -86,9 +86,9 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     expected = {
       'host'      => '10.102.0.0',
       'host2'     => '10.102.0.0',
-      'member_id' => '774472f0dc892f0b3299cae8dadacd0a74ba59d7',
-      'mail'      => 'd7b728209f5dd8df10cecbced30394c3c7fc2c82',
-      'telephone' => 'a67f73c395105a358a03a0f127bf64b5495e7841',
+      'member_id' => '8cb2237d0679ca88db6464eac60da96345513964',
+      'mail'      => '914fec35ce8bfa1a067581032f26b053591ee38a',
+      'telephone' => 'ce164718b94212332187eb8420903b46b334d609',
       'action'    => 'signup'
     }
     filtered = filter(conf, messages)
@@ -119,9 +119,9 @@ class AnonymizerFilterTest < Test::Unit::TestCase
         'host1' => '10.102.0.0'
       },
       'nested' => {
-        'data' => '774472f0dc892f0b3299cae8dadacd0a74ba59d7',
+        'data' => '8cb2237d0679ca88db6464eac60da96345513964',
         'nested' => {
-          'data' => '774472f0dc892f0b3299cae8dadacd0a74ba59d7'
+          'data' => '8cb2237d0679ca88db6464eac60da96345513964'
         }
       }
     }
@@ -143,8 +143,8 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     ]
     expected = {
       'host' => '10.102.3.0',
-      'array' => ["c1628fc0d473cb21b15607c10bdcad19d1a42e24", "ea87abc249f9f2d430edb816514bffeffd3e698e"],
-      'hash' => '28fe85deb0d1d39ee14c49c62bc4773b0338247b'
+      'array' => ["e3cbba8883fe746c6e35783c9404b4bc0c7ee9eb", "a4ac914c09d7c097fe1f4f96b897e625b6922069"],
+      'hash' => '1a1903d78aed9403649d61cb21ba6b489249761b'
     }
     filtered = filter(conf, messages)
     assert_equal(expected, filtered[0])
