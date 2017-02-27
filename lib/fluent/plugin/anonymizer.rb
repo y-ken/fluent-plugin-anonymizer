@@ -1,5 +1,6 @@
 require 'openssl'
 require 'ipaddr'
+require 'fluent/config/error'
 
 module Fluent
   class Anonymizer
