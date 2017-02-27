@@ -1,3 +1,4 @@
+require 'fluent/output'
 require 'fluent/mixin/rewrite_tag_name'
 
 class Fluent::AnonymizerOutput < Fluent::Output

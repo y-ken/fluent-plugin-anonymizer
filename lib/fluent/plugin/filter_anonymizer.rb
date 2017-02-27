@@ -1,3 +1,6 @@
+require 'fluent/filter'
+require 'fluent/plugin/anonymizer'
+
 module Fluent
   class AnonymizerFilter < Filter
     Plugin.register_filter('anonymizer', self)
@@ -16,7 +19,6 @@ DESC
 
     def initialize
       super
-      require 'fluent/plugin/anonymizer'
     end
 
     def configure(conf)
