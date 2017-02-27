@@ -9,14 +9,63 @@ Fluentd filter output plugin to anonymize records with [OpenSSL::Digest](https:/
 install with gem or fluent-gem command as:
 
 `````
-### native gem
-gem install fluent-plugin-anonymizer
+# for fluentd
+$ gem install fluent-plugin-anonymizer
 
-### td-agent gem
-/usr/lib64/fluent/ruby/bin/fluent-gem install fluent-plugin-anonymizer
+# for td-agent
+$ sudo /usr/lib64/fluent/ruby/bin/fluent-gem install fluent-plugin-anonymizer -v 0.5.0
+
+# for td-agent2
+$ sudo td-agent-gem install fluent-plugin-anonymizer -v 0.5.0
 `````
 
 ## Tutorial
+
+### Filter Plugin
+
+#### configuration
+
+```text
+<source>
+  @type dummy
+  tag raw.dummy
+  dummy [
+  {"host":"10.102.3.80","member_id":"12345", "mail":"example@example.com"},
+  {"host":"2001:db8:0:8d3:0:8a2e::","member_id":"61f6c1b5f19e0a7f73dd52a23534085bf01f2c67","mail":"eeb890d74b8c1c4cd1e35a3ea62166e0b770f4f4"}
+  ]
+</source>
+
+<filter raw.**>
+  @type anonymizer
+
+  # Specify hashing keys with comma
+  sha1_keys         user_id, member_id, mail
+  
+  # Set hash salt with any strings for more security
+  hash_salt         mysaltstring
+  
+  # Specify rounding address keys with comma and subnet mask
+  ipaddr_mask_keys  host
+  ipv4_mask_subnet  24
+  ipv6_mask_subnet  104
+</filter>
+
+<match raw.**>
+  @type stdout
+</match>
+ ```
+
+#### result
+
+This sample result has made with the above configuration into "fluent.conf".
+
+```text
+$ fluentd -c fluent.conf
+2017-02-27 22:59:18.070132000 +0900 raw.dummy: {"host":"10.102.3.0","member_id":"5ab2cebb0537866c4a0cd2e2f3502c0976b788da","mail":"7e9d6dbefa72d56056c8c740b34b5c0bbfec8d87"}
+2017-02-27 22:59:19.079251000 +0900 raw.dummy: {"host":"2001:db8:0:8d3:0:8a2e::","member_id":"445514dfcd82b2a8b94ec6763afa6e349e78c5f8","mail":"54608576c8d815a4ffd595a3c1fe72751ed04424"}
+2017-02-27 22:59:20.086747000 +0900 raw.dummy: {"host":"10.102.3.0","member_id":"b14a8f98019ec84c6fe329d5af62c46bb45348f8","mail":"723da8084da3438d9287b44e5a714b70e10a9755"}
+2017-02-27 22:59:21.094767000 +0900 raw.dummy: {"host":"2001:db8:0:8d3:0:8a2e::","member_id":"d38ebb9b96c0cbffd4136935c7f6fe9dd05980cd","mail":"b6f9d777831cbecfd2ea806f5f62f79a275bbb82"}
+```
 
 ### Output Plugin
 
@@ -65,46 +114,6 @@ $ tail -f /var/log/td-agent/td-agent.log
 2014-01-06 18:30:22 +0900 anonymized.message: {"host":"2001:db8:0:8d3:0:8a2e::","member_id":"61f6c1b5f19e0a7f73dd52a23534085bf01f2c67","mail":"eeb890d74b8c1c4cd1e35a3ea62166e0b770f4f4"}
 `````
 
-### Filter Plugin
-
-#### configuration
-
-```text
-<source>
-  @type dummy
-  tag raw.dummy
-  dummy [
-  {"host":"10.102.3.80","member_id":"12345", "mail":"example@example.com"},
-  {"host":"2001:db8:0:8d3:0:8a2e::","member_id":"61f6c1b5f19e0a7f73dd52a23534085bf01f2c67","mail":"eeb890d74b8c1c4cd1e35a3ea62166e0b770f4f4"}
-  ]
-</source>
-
-<filter raw.**>
-  @type anonymizer
-
-  # Specify hashing keys with comma
-  sha1_keys         user_id, member_id, mail
-  
-  # Set hash salt with any strings for more security
-  hash_salt         mysaltstring
-  
-  # Specify rounding address keys with comma and subnet mask
-  ipaddr_mask_keys  host
-  ipv4_mask_subnet  24
-  ipv6_mask_subnet  104
-</filter>
-
-<match raw.**>
-  @type stdout
-</match>
- ```
-
-#### result
-
-```text
-$ fluentd -c fluent.conf
-```
-
 ## Parameters
 
 * `md5_keys` `sha1_keys` `sha256_keys` `sha384_keys` `sha512_keys`
@@ -143,7 +152,7 @@ set one or more option are required for editing tag name using HandleTagNameMixi
 
 * tag
 
-On using this option [like 'tag anonymized.${tag}' with tag placeholder](https://github.com/y-ken/fluent-plugin-anonymizer/blob/master/test/plugin/test_out_anonymizer.rb#L153), it will be overwrite after these options affected. which are remove_tag_prefix, remove_tag_suffix, add_tag_prefix and add_tag_suffix.
+On using this option [like 'tag anonymized.${tag}' with tag placeholder](https://github.com/y-ken/fluent-plugin-anonymizer/blob/master/test/plugin/test_out_anonymizer.rb#L179), it will be overwrite after these options affected. which are remove_tag_prefix, remove_tag_suffix, add_tag_prefix and add_tag_suffix.
 
 ## Notes
 
