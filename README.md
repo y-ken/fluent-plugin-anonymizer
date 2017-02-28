@@ -13,10 +13,10 @@ install with gem or fluent-gem command as:
 $ gem install fluent-plugin-anonymizer
 
 # for td-agent
-$ sudo /usr/lib64/fluent/ruby/bin/fluent-gem install fluent-plugin-anonymizer -v 0.5.0
+$ sudo /usr/lib64/fluent/ruby/bin/fluent-gem install fluent-plugin-anonymizer -v 0.5.1
 
 # for td-agent2
-$ sudo td-agent-gem install fluent-plugin-anonymizer -v 0.5.0
+$ sudo td-agent-gem install fluent-plugin-anonymizer -v 0.5.1
 `````
 
 ## Tutorial
