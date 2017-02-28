@@ -1,3 +1,4 @@
+require 'fluent/config/error'
 require 'openssl'
 require 'ipaddr'
 
