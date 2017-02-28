@@ -94,8 +94,8 @@ It is a sample to hash record with sha1 for `user_id`, `member_id` and `mail`. F
   ipv6_mask_subnet  104
   
   # Set tag rename pattern
+  tag               anonymized.${tag}
   remove_tag_prefix test.
-  add_tag_prefix    anonymized.
 </match>
 
 <match anonymized.message>
@@ -141,18 +141,18 @@ Round number for following one or more keys. It makes easy to aggregate calculat
 * include_tag_key (default: false)
 * tag_key
 
+set one or more option are required for editing tag name using HandleTagNameMixin.
+
+* tag
+
+In the case of using this option [like 'tag anonymized.${tag}' with tag placeholder](https://github.com/y-ken/fluent-plugin-anonymizer/blob/master/test/plugin/test_out_anonymizer.rb#L179), tag will be modified after these options affected. which are remove_tag_prefix, remove_tag_suffix, add_tag_prefix and add_tag_suffix.
+
 Add original tag name into filtered record using SetTagKeyMixin.
 
 * remove_tag_prefix
 * remove_tag_suffix
 * add_tag_prefix
 * add_tag_suffix
-
-set one or more option are required for editing tag name using HandleTagNameMixin.
-
-* tag
-
-On using this option [like 'tag anonymized.${tag}' with tag placeholder](https://github.com/y-ken/fluent-plugin-anonymizer/blob/master/test/plugin/test_out_anonymizer.rb#L179), it will be overwrite after these options affected. which are remove_tag_prefix, remove_tag_suffix, add_tag_prefix and add_tag_suffix.
 
 ## Notes
 
