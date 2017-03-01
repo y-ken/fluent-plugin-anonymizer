@@ -1,4 +1,4 @@
-require 'fluent/filter'
+require 'fluent/plugin/filter'
 require 'openssl'
 require 'uri'
 require 'ipaddr'
@@ -28,7 +28,7 @@ require 'ipaddr'
 #   </mask>
 # </filter>
 
-module Fluent
+module Fluent::Plugin
   class AnonymizerFilter < Filter
     Fluent::Plugin.register_filter('anonymizer', self)
 
@@ -175,7 +175,7 @@ module Fluent
     end
 
     def filter_stream(tag, es)
-      new_es = MultiEventStream.new
+      new_es = Fluent::MultiEventStream.new
       es.each do |time, record|
         new_es.add(time, @masks.reduce(record){|r,mask| mask.call(r) })
       end
