@@ -174,14 +174,6 @@ module Fluent::Plugin
       record.update(@masks.reduce(record){|r,mask| mask.call(r)})
     end
 
-    def filter_stream(tag, es)
-      new_es = Fluent::MultiEventStream.new
-      es.each do |time, record|
-        new_es.add(time, @masks.reduce(record){|r,mask| mask.call(r) })
-      end
-      new_es
-    end
-
     def salt_determine(key)
       return @salt_map[key] if @salt_map.has_key?(key)
       keystr = key.to_s
