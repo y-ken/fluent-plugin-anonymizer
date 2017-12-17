@@ -4,20 +4,30 @@
 
 Fluentd filter output plugin to anonymize records with [OpenSSL::Digest](https://docs.ruby-lang.org/ja/latest/class/OpenSSL=3a=3aDigest.html) of MD5/SHA1/SHA256/SHA384/SHA512 algorithms. This data masking plugin protects privacy data such as UserID, Email, Phone number, IPv4/IPv6 address and so on.
 
+## Requirements
+
+| fluent-plugin-anonymizer | fluentd    | ruby   |
+|--------------------|------------|--------|
+|  1.0.0            | v0.14.x | >= 2.1 |
+|  0.5.1            | v0.12.x | >= 1.9 |
+
+
 ## Installation
 
-install with gem or fluent-gem command as:
+install with gem or td-agent-gem command as:
 
 `````
-# for fluentd
+# for system installed fluentd
 $ gem install fluent-plugin-anonymizer
 
-# for td-agent
-$ sudo /usr/lib64/fluent/ruby/bin/fluent-gem install fluent-plugin-anonymizer -v 0.5.1
-
-# for td-agent2
+# for td-agent2 (with fluentd v0.12)
 $ sudo td-agent-gem install fluent-plugin-anonymizer -v 0.5.1
+
+# for td-agent3 (with fluentd v0.14)
+$ sudo td-agent-gem install fluent-plugin-anonymizer -v 1.0.0
 `````
+
+For more details, see [Plugin Management](https://docs.fluentd.org/v0.14/articles/plugin-management)
 
 ## Tutorial
 
