@@ -1,4 +1,5 @@
 require 'helper'
+require 'fluent/test/driver/filter'
 
 class AnonymizerFilterTest < Test::Unit::TestCase
   def setup
@@ -18,50 +19,50 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     ipv4_mask_subnet  24
   ]
 
-  def create_driver(conf=CONFIG, tag='test')
-    Fluent::Test::FilterTestDriver.new(Fluent::AnonymizerFilter, tag).configure(conf)
+  def create_driver(conf=CONFIG)
+    Fluent::Test::Driver::Filter.new(Fluent::Plugin::AnonymizerFilter).configure(conf)
   end
 
   def filter(conf, messages)
     d = create_driver(conf)
-    d.run {
+    d.run(default_tag: 'test') {
       messages.each {|message|
-        d.emit(message, @time)
+        d.feed(@time, message)
       }
     }
-    filtered = d.filtered_as_array
-    filtered.map {|m| m[2] }
+    filtered = d.filtered
+    filtered.map {|m| m.last }
   end
 
   require 'ostruct'
   test 'method md5 works correctly' do
-    conv = Fluent::AnonymizerFilter::MASK_METHODS[:md5].call(OpenStruct.new)
+    conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:md5].call(OpenStruct.new)
     digest = conv.call('value1', 'salt')
     assert_equal 'd21fe9523421f12daad064fd082913fd', digest
   end
   test 'method sha1 works correctly' do
-    conv = Fluent::AnonymizerFilter::MASK_METHODS[:sha1].call(OpenStruct.new)
+    conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:sha1].call(OpenStruct.new)
     digest = conv.call('value2', 'salt')
     assert_equal 'd2ed8e797065322371012fd8c1a39682987ddb71', digest
   end
   test 'method sha256 works correctly' do
-    conv = Fluent::AnonymizerFilter::MASK_METHODS[:sha256].call(OpenStruct.new)
+    conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:sha256].call(OpenStruct.new)
     digest = conv.call('value3', 'salt')
     assert_equal 'd70daf9654b8a3ba335f8f9f9638a93e8eba6763a0012ac44a928857871abe82', digest
   end
   test 'method sha384 works correctly' do
-    conv = Fluent::AnonymizerFilter::MASK_METHODS[:sha384].call(OpenStruct.new)
+    conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:sha384].call(OpenStruct.new)
     digest = conv.call('value4', 'salt')
     assert_equal '646192f8b1ea905238df589a00a10598a53eb245df4ab14b7e9eccf80c37386c99abe5259ccb2ba950003423fa0790ee', digest
   end
   test 'method sha512 works correctly' do
-    conv = Fluent::AnonymizerFilter::MASK_METHODS[:sha512].call(OpenStruct.new)
+    conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:sha512].call(OpenStruct.new)
     digest = conv.call('value5', 'salt')
     expected = '47c82bfea3783c20e3ba3629f0f827bebf0fa65a9104ada5339e5776e5958f061fe7114bfbe1e9d410aff43c6bee8365adf4fdd072e54ab4fffad820f354f545'
     assert_equal expected, digest
   end
   test 'method uri_path removes path, query parameters, fragment, user and password of uri strings' do
-    conv = Fluent::AnonymizerFilter::MASK_METHODS[:uri_path].call(OpenStruct.new)
+    conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:uri_path].call(OpenStruct.new)
     assert_equal '/my/path', conv.call('/my/path', '')
     assert_equal 'yay/unknown/format', conv.call('yay/unknown/format', '')
     assert_equal 'http://example.com/', conv.call('http://example.com/path/to/secret', '')
@@ -74,7 +75,7 @@ class AnonymizerFilterTest < Test::Unit::TestCase
   end
   test 'method network masks ipaddresses with specified mask bit lengths' do
     conf = OpenStruct.new(ipv4_mask_bits: 24, ipv6_mask_bits: 104)
-    conv = Fluent::AnonymizerFilter::MASK_METHODS[:network].call(conf)
+    conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:network].call(conf)
     assert_equal '192.168.1.0', conv.call('192.168.1.1', '')
     assert_equal '10.110.18.0', conv.call('10.110.18.9', '')
     assert_equal '2001:db8:0:8d3:0:8a2e::', conv.call('2001:db8:0:8d3:0:8a2e:70:7344', '')
@@ -302,4 +303,3 @@ CONF
     assert_equal(expected, filtered)
   end
 end
-

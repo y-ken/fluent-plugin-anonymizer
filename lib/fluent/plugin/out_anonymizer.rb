@@ -36,6 +36,7 @@ DESC
   end
 
   def configure(conf)
+    log.warn "out_anonymizer is now deprecated. It will be removed in a future release. Please consider to use filter_anonymizer."
     super
     @anonymizer = Fluent::Anonymizer.new(self, conf)
   end
