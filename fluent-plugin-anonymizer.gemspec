@@ -21,5 +21,4 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "test-unit", "~> 3"
   spec.add_development_dependency "appraisal"
   spec.add_runtime_dependency "fluentd", [">= 0.14.0", "< 2"]
-  spec.add_runtime_dependency "fluent-mixin-rewrite-tag-name"
 end
