@@ -9,14 +9,31 @@ class AnonymizerFilterTest < Test::Unit::TestCase
   end
 
   CONFIG = %[
-    md5_keys          data_for_md5
-    sha1_keys         data_for_sha1
-    sha256_keys       data_for_sha256
-    sha384_keys       data_for_sha384
-    sha512_keys       data_for_sha512
-    hash_salt         test_salt_string
-    ipaddr_mask_keys  host
-    ipv4_mask_subnet  24
+    <mask md5>
+      key  data_for_md5
+      salt test_salt_string
+    </mask>
+    <mask sha1>
+      key  data_for_sha1
+      salt test_salt_string
+    </mask>
+    <mask sha256>
+      key  data_for_sha256
+      salt test_salt_string
+    </mask>
+    <mask sha384>
+      key  data_for_sha384
+      salt test_salt_string
+    </mask>
+    <mask sha512>
+      key  data_for_sha512
+      salt test_salt_string
+    </mask>
+    <mask network>
+      key            host
+      ipv4_mask_bits 24
+      salt test_salt_string
+    </mask>
   ]
 
   def create_driver(conf=CONFIG)
@@ -89,7 +106,7 @@ class AnonymizerFilterTest < Test::Unit::TestCase
       d = create_driver('unknown_keys')
     }
     d = create_driver(CONFIG)
-    assert_equal 'test_salt_string', d.instance.config['hash_salt']
+    assert_equal 'test_salt_string', d.instance.mask_config_list.first['salt']
   end
 
   test 'masker_for_key generates a lambda for conversion with exact key match' do
@@ -202,9 +219,14 @@ CONF
 
   def test_filter_multi_keys
     conf = %[
-      sha1_keys         member_id, mail, telephone
-      ipaddr_mask_keys  host, host2
-      ipv4_mask_subnet  16
+      <mask sha1>
+        keys member_id, mail, telephone
+        salt ""
+      </mask>
+      <mask network>
+        keys           host, host2
+        ipv4_mask_bits 16
+      </mask>
     ]
     messages = [
       {
@@ -230,9 +252,14 @@ CONF
 
   def test_filter_nested_keys
     conf = %[
-      sha1_keys         nested.data,nested.nested.data
-      ipaddr_mask_keys  hosts.host1
-      ipv4_mask_subnet  16
+      <mask sha1>
+        key_chains nested.data,nested.nested.data
+        salt       ""
+      </mask>
+      <mask network>
+        key_chain      hosts.host1
+        ipv4_mask_bits 16
+      </mask>
     ]
     messages = [
       {
@@ -264,8 +291,15 @@ CONF
 
   def test_filter_nest_value
     conf = %[
-      sha1_keys         array,hash
-      ipaddr_mask_keys  host
+      <mask sha1>
+        keys                array, hash
+        mask_array_elements true
+        salt                ""
+      </mask>
+      <mask network>
+        key            host
+        ipv4_mask_bits 24
+      </mask>
     ]
     messages = [
       {
@@ -285,9 +319,11 @@ CONF
 
   def test_filter_ipv6
     conf = %[
-      ipaddr_mask_keys  host
-      ipv4_mask_subnet  24
-      ipv6_mask_subnet  104
+      <mask network>
+        key            host
+        ipv4_mask_bits 24
+        ipv6_mask_bits 104
+      </mask>
     ]
     messages = [
       { 'host' => '10.102.3.80' },

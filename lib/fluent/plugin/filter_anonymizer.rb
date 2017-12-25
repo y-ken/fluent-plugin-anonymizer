@@ -32,6 +32,8 @@ module Fluent::Plugin
   class AnonymizerFilter < Filter
     Fluent::Plugin.register_filter('anonymizer', self)
 
+    helpers :record_accessor
+
     MASK_METHODS = {
       md5:    ->(opts){ ->(v,salt){ OpenSSL::Digest.new("md5").update(salt).update(v.to_s).hexdigest } },
       sha1:   ->(opts){ ->(v,salt){ OpenSSL::Digest.new("sha1").update(salt).update(v.to_s).hexdigest } },
@@ -66,6 +68,14 @@ module Fluent::Plugin
         } },
     }
 
+    OBSOLETED_MASK_METHOD_PARAMS_MESSAGE = <<~EOF
+Use
+<mask MASK_METHOD>
+  # ...
+</mask>
+instead.
+EOF
+
     config_param :salt, :string, default: nil
     config_param :salts, :array, default: nil
     config_section :mask, param_name: :mask_config_list, required: false, multi: true do
@@ -86,11 +96,16 @@ module Fluent::Plugin
     end
 
     # obsolete configuration parameters
-    config_param :md5_keys,    :string, default: nil
-    config_param :sha1_keys,   :string, default: nil
-    config_param :sha256_keys, :string, default: nil
-    config_param :sha384_keys, :string, default: nil
-    config_param :sha512_keys, :string, default: nil
+    config_param :md5_keys,    :string, default: nil,
+                 obsoleted: OBSOLETED_MASK_METHOD_PARAMS_MESSAGE
+    config_param :sha1_keys,   :string, default: nil,
+                 obsoleted: OBSOLETED_MASK_METHOD_PARAMS_MESSAGE
+    config_param :sha256_keys, :string, default: nil,
+                 obsoleted: OBSOLETED_MASK_METHOD_PARAMS_MESSAGE
+    config_param :sha384_keys, :string, default: nil,
+                 obsoleted: OBSOLETED_MASK_METHOD_PARAMS_MESSAGE
+    config_param :sha512_keys, :string, default: nil,
+                 obsoleted: OBSOLETED_MASK_METHOD_PARAMS_MESSAGE
     config_param :hash_salt,   :string, default: nil
     config_param :ipaddr_mask_keys, :string, default: nil
     config_param :ipv4_mask_subnet, :integer, default: 24
@@ -198,11 +213,12 @@ module Fluent::Plugin
     def masker_for_key(conv, key, opts)
       for_each = opts.mask_array_elements
       salt = opts.salt || salt_determine(key)
+      accessor = record_accessor_create(key)
       if for_each
         ->(record){
           begin
-            if record.has_key?(key)
-              record[key] = mask_value(record[key], for_each){|v| conv.call(v, salt) }
+            if raw_value = accessor.call(record)
+              record[key] = mask_value(raw_value, for_each){|v| conv.call(v, salt) }
             end
           rescue => e
             log.error "unexpected error while masking value", error_class: e.class, error: e.message
@@ -212,8 +228,8 @@ module Fluent::Plugin
       else
         ->(record){
           begin
-            if record.has_key?(key)
-              record[key] = conv.call(record[key], salt)
+            if raw_value = accessor.call(record)
+              record[key] = conv.call(raw_value, salt)
             end
           rescue => e
             log.error "unexpected error while masking value", error_class: e.class, error: e.message
@@ -226,13 +242,19 @@ module Fluent::Plugin
     def masker_for_key_chain(conv, key_chain, opts)
       for_each = opts.mask_array_elements
       heading = key_chain[0..-2]
-      container_fetcher = ->(record){ heading.reduce(record){|r,c| r && r.has_key?(c) ? r[c] : nil } }
+      container_fetcher = ->(record){
+        heading.reduce(record){|r,c|
+          container = record_accessor_create(c)
+          container.call(r)
+        }
+      }
       tailing = key_chain[-1]
       ->(record){
         begin
           container = container_fetcher.call(record)
-          if container && container.has_key?(tailing)
-            container[tailing] = mask_value(container[tailing], for_each){|v| conv.call(v, opts.salt || salt_determine(tailing)) }
+          accessor = record_accessor_create(tailing)
+          if raw_value = accessor.call(container)
+            container[tailing] = mask_value(raw_value, for_each){|v| conv.call(v, opts.salt || salt_determine(tailing)) }
           end
         rescue => e
           log.error "unexpected error while masking value", error_class: e.class, error: e.message
