@@ -2,7 +2,7 @@
 
 ## Overview
 
-Fluentd filter output plugin to anonymize records with [OpenSSL::Digest](https://docs.ruby-lang.org/ja/latest/class/OpenSSL=3a=3aDigest.html) of MD5/SHA1/SHA256/SHA384/SHA512 algorithms. This data masking plugin protects privacy data such as UserID, Email, Phone number, IPv4/IPv6 address and so on.
+Fluentd filter plugin to anonymize records with [OpenSSL::Digest](https://docs.ruby-lang.org/ja/latest/class/OpenSSL=3a=3aDigest.html) of MD5/SHA1/SHA256/SHA384/SHA512 algorithms. This data masking plugin protects privacy data such as UserID, Email, Phone number, IPv4/IPv6 address and so on.
 
 ## Requirements
 
@@ -77,53 +77,6 @@ $ fluentd -c fluent.conf
 2017-02-27 22:59:21.094767000 +0900 raw.dummy: {"host":"2001:db8:0:8d3:0:8a2e::","member_id":"d38ebb9b96c0cbffd4136935c7f6fe9dd05980cd","mail":"b6f9d777831cbecfd2ea806f5f62f79a275bbb82"}
 ```
 
-### Output Plugin
-
-#### configuration
-
-It is a sample to hash record with sha1 for `user_id`, `member_id` and `mail`. For IP address, auto-detecting IPv4/IPv6 and rounding number with 24bit(IPv4) or 104bit(IPv6) netmask using `ipaddr_mask_keys` and `ipv4_mask_subnet`, `ipv6_mask_subnet` option.
-
-`````
-<source>
-  @type forward
-  port 24224
-</source>
-
-<match test.message>
-  @type anonymizer
-  
-  # Specify hashing keys with comma
-  sha1_keys         user_id, member_id, mail
-  
-  # Set hash salt with any strings for more security
-  hash_salt         mysaltstring
-  
-  # Specify rounding address keys with comma and subnet mask
-  ipaddr_mask_keys  host
-  ipv4_mask_subnet  24
-  ipv6_mask_subnet  104
-  
-  # Set tag rename pattern
-  tag               anonymized.${tag}
-  remove_tag_prefix test.
-</match>
-
-<match anonymized.message>
-  @type stdout
-</match>
-`````
-
-#### result
-
-`````
-$ echo '{"host":"10.102.3.80","member_id":"12345", "mail":"example@example.com"}' | fluent-cat test.message
-$ echo '{"host":"2001:db8:0:8d3:0:8a2e:70:7344","member_id":"12345", "mail":"example@example.com"}' | fluent-cat test.message
-
-$ tail -f /var/log/td-agent/td-agent.log
-2014-01-06 18:30:21 +0900 anonymized.message: {"host":"10.102.3.0","member_id":"61f6c1b5f19e0a7f73dd52a23534085bf01f2c67","mail":"eeb890d74b8c1c4cd1e35a3ea62166e0b770f4f4"}
-2014-01-06 18:30:22 +0900 anonymized.message: {"host":"2001:db8:0:8d3:0:8a2e::","member_id":"61f6c1b5f19e0a7f73dd52a23534085bf01f2c67","mail":"eeb890d74b8c1c4cd1e35a3ea62166e0b770f4f4"}
-`````
-
 ## Parameters
 
 * `md5_keys` `sha1_keys` `sha256_keys` `sha384_keys` `sha512_keys`
@@ -153,20 +106,9 @@ Round number for following one or more keys. It makes easy to aggregate calculat
 
 set one or more option are required for editing tag name using HandleTagNameMixin.
 
-* tag
-
-In the case of using this option [like 'tag anonymized.${tag}' with tag placeholder](https://github.com/y-ken/fluent-plugin-anonymizer/blob/master/test/plugin/test_out_anonymizer.rb#L179), tag will be modified after these options affected. which are remove_tag_prefix, remove_tag_suffix, add_tag_prefix and add_tag_suffix.
-
-Add original tag name into filtered record using SetTagKeyMixin.
-
-* remove_tag_prefix
-* remove_tag_suffix
-* add_tag_prefix
-* add_tag_suffix
-
 ## Notes
 
-* hashing nested value behavior is compatible with [LogStash::Filters::Anonymize](https://github.com/logstash/logstash/blob/master/lib/logstash/filters/anonymize.rb) does. For further details, please check it out the test code at [test_emit_nest_value](https://github.com/y-ken/fluent-plugin-anonymizer/blob/master/test/plugin/test_out_anonymizer.rb#L91).
+* hashing nested value behavior is compatible with [LogStash::Filters::Anonymize](https://github.com/logstash/logstash/blob/master/lib/logstash/filters/anonymize.rb) does. For further details, please check it out the test code at [test_emit_nest_value](https://github.com/y-ken/fluent-plugin-anonymizer/blob/master/test/plugin/test_filter_anonymizer.rb#L231).
 
 ## Blog Articles
 

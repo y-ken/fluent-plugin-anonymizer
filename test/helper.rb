@@ -22,11 +22,7 @@ unless ENV.has_key?('VERBOSE')
   $log = nulllogger
 end
 
-require 'fluent/plugin/out_anonymizer'
-if Fluent.const_defined?(:Filter)
-  require 'fluent/plugin/filter_anonymizer'
-end
-
+require 'fluent/plugin/filter_anonymizer'
 
 class Test::Unit::TestCase
 end
