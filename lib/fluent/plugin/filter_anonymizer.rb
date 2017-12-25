@@ -68,7 +68,7 @@ module Fluent::Plugin
         } },
     }
 
-    OBSOLETED_MASK_METHOD_PARAMS_MESSAGE = <<~EOF
+    OBSOLETED_MASK_METHOD_PARAMS_MESSAGE = <<-EOF
 Use
 <mask MASK_METHOD>
   # ...
