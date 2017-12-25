@@ -106,10 +106,14 @@ EOF
                  obsoleted: OBSOLETED_MASK_METHOD_PARAMS_MESSAGE
     config_param :sha512_keys, :string, default: nil,
                  obsoleted: OBSOLETED_MASK_METHOD_PARAMS_MESSAGE
-    config_param :hash_salt,   :string, default: nil
-    config_param :ipaddr_mask_keys, :string, default: nil
-    config_param :ipv4_mask_subnet, :integer, default: 24
-    config_param :ipv6_mask_subnet, :integer, default: 104
+    config_param :hash_salt,   :string, default: nil,
+                 obsoleted: "Use salt parameter in mask directive instead."
+    config_param :ipaddr_mask_keys, :string, default: nil,
+                 obsoleted: "Use keys parameter in mask directive instead."
+    config_param :ipv4_mask_subnet, :integer, default: 24,
+                 obsoleted: "Use ipv4_mask_bits in mask directive instead."
+    config_param :ipv6_mask_subnet, :integer, default: 104,
+                 obsoleted: "Use ipv6_mask_bits in mask directive instead."
 
     def initialize
       super
@@ -144,22 +148,6 @@ EOF
         @masks << masker_for_value_in_subnet(conv, c.value_in_subnet, c) if c.value_in_subnet
       end
 
-      # obsolete option handling
-      [[@md5_keys,:md5],[@sha1_keys,:sha1],[@sha256_keys,:sha256],[@sha384_keys,:sha384],[@sha512_keys,:sha512]].each do |param,m|
-        next unless param
-        @salt_list << (@hash_salt || '') if @salt_list.empty? # to suppress ConfigError for salt missing
-        conf = OpenStruct.new
-        conf.salt = @hash_salt || ''
-        conf.mask_array_elements = true
-        conv = MASK_METHODS[m].call(conf)
-        param.split(',').map(&:strip).each do |key|
-          if key.include?('.')
-            @masks << masker_for_key_chain(conv, key.split('.'), conf)
-          else
-            @masks << masker_for_key(conv, key, conf)
-          end
-        end
-      end
       if @ipaddr_mask_keys
         @salt_list << (@hash_salt || '') if @salt_list.empty? # to suppress ConfigError for salt missing
         conf = OpenStruct.new
