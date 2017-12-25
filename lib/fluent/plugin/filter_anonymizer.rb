@@ -82,10 +82,13 @@ EOF
       config_argument :method, :enum, list: MASK_METHODS.keys
       config_param :salt, :string, default: nil
 
-      config_param :key,             :string, default: nil
+      config_param :key,             :string, default: nil,
+                   obsoleted: "Use keys parameter instead."
       config_param :keys,            :array,  default: []
-      config_param :key_chain,       :string, default: nil # for.nested.key
-      config_param :key_chains,      :array,  default: []  # ["for.nested.key","can.be.specified","twice.or.more"]
+      config_param :key_chain,       :string, default: nil, # for.nested.key
+                   obsoleted: "Use keys parameter instead."
+      config_param :key_chains,      :array,  default: [],  # ["for.nested.key","can.be.specified","twice.or.more"]
+                   obsoleted: "Use keys parameter instead."
       config_param :key_pattern,     :string, default: nil
       config_param :value_pattern,   :string, default: nil
       config_param :value_in_subnet, :string, default: nil # 192.168.0.0/24
@@ -137,11 +140,12 @@ EOF
         end
 
         conv = MASK_METHODS[c.method].call(c)
-        [c.key || nil, *c.keys].compact.each do |key|
-          @masks << masker_for_key(conv, key, c)
-        end
-        [c.key_chain || nil, *c.key_chains].compact.each do |key_chain|
-          @masks << masker_for_key_chain(conv, key_chain.split('.'), c)
+        [*c.keys].compact.each do |key|
+          if key.split('.').length > 1
+            @masks << masker_for_key_chain(conv, key.split('.'), c)
+          else
+            @masks << masker_for_key(conv, key, c)
+          end
         end
         @masks << masker_for_key_pattern(conv, c.key_pattern, c) if c.key_pattern
         @masks << masker_for_value_pattern(conv, c.value_pattern, c) if c.value_pattern

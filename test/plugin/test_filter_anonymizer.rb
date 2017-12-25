@@ -10,29 +10,29 @@ class AnonymizerFilterTest < Test::Unit::TestCase
 
   CONFIG = %[
     <mask md5>
-      key  data_for_md5
+      keys data_for_md5
       salt test_salt_string
     </mask>
     <mask sha1>
-      key  data_for_sha1
+      keys data_for_sha1
       salt test_salt_string
     </mask>
     <mask sha256>
-      key  data_for_sha256
+      keys data_for_sha256
       salt test_salt_string
     </mask>
     <mask sha384>
-      key  data_for_sha384
+      keys data_for_sha384
       salt test_salt_string
     </mask>
     <mask sha512>
-      key  data_for_sha512
+      keys data_for_sha512
       salt test_salt_string
     </mask>
     <mask network>
-      key            host
+      keys           host
       ipv4_mask_bits 24
-      salt test_salt_string
+      salt           test_salt_string
     </mask>
   ]
 
@@ -185,7 +185,7 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     plugin = create_driver(<<-CONF).instance
       <mask md5>
         salt testing
-        key  test
+        keys test
       </mask>
 CONF
     r = plugin.filter('tag', Time.now.to_i, {"test" => "value", "name" => "fluentd plugin"})
@@ -253,11 +253,11 @@ CONF
   def test_filter_nested_keys
     conf = %[
       <mask sha1>
-        key_chains nested.data,nested.nested.data
-        salt       ""
+        keys nested.data,nested.nested.data
+        salt ""
       </mask>
       <mask network>
-        key_chain      hosts.host1
+        keys           hosts.host1
         ipv4_mask_bits 16
       </mask>
     ]
@@ -297,7 +297,7 @@ CONF
         salt                ""
       </mask>
       <mask network>
-        key            host
+        keys           host
         ipv4_mask_bits 24
       </mask>
     ]
@@ -320,7 +320,7 @@ CONF
   def test_filter_ipv6
     conf = %[
       <mask network>
-        key            host
+        keys           host
         ipv4_mask_bits 24
         ipv6_mask_bits 104
       </mask>
