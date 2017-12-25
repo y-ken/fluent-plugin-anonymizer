@@ -49,15 +49,17 @@ For more details, see [Plugin Management](https://docs.fluentd.org/v0.14/article
   @type anonymizer
 
   # Specify hashing keys with comma
-  sha1_keys         user_id, member_id, mail
-  
-  # Set hash salt with any strings for more security
-  hash_salt         mysaltstring
-  
+  <mask sha1>
+    keys user_id, member_id, mail
+    # Set hash salt with any strings for more security
+    salt mysaltstring
+  </mask>
   # Specify rounding address keys with comma and subnet mask
-  ipaddr_mask_keys  host
-  ipv4_mask_subnet  24
-  ipv6_mask_subnet  104
+  <mask network>
+    keys  host
+    ipv4_mask_subnet  24
+    ipv6_mask_subnet  104
+  </mask>
 </filter>
 
 <match raw.**>
@@ -71,40 +73,56 @@ This sample result has made with the above configuration into "fluent.conf".
 
 ```text
 $ fluentd -c fluent.conf
-2017-02-27 22:59:18.070132000 +0900 raw.dummy: {"host":"10.102.3.0","member_id":"5ab2cebb0537866c4a0cd2e2f3502c0976b788da","mail":"7e9d6dbefa72d56056c8c740b34b5c0bbfec8d87"}
-2017-02-27 22:59:19.079251000 +0900 raw.dummy: {"host":"2001:db8:0:8d3:0:8a2e::","member_id":"445514dfcd82b2a8b94ec6763afa6e349e78c5f8","mail":"54608576c8d815a4ffd595a3c1fe72751ed04424"}
-2017-02-27 22:59:20.086747000 +0900 raw.dummy: {"host":"10.102.3.0","member_id":"b14a8f98019ec84c6fe329d5af62c46bb45348f8","mail":"723da8084da3438d9287b44e5a714b70e10a9755"}
-2017-02-27 22:59:21.094767000 +0900 raw.dummy: {"host":"2001:db8:0:8d3:0:8a2e::","member_id":"d38ebb9b96c0cbffd4136935c7f6fe9dd05980cd","mail":"b6f9d777831cbecfd2ea806f5f62f79a275bbb82"}
+2017-12-25 15:00:00.091048000 +0900 raw.dummy: {"host":"10.102.3.0","member_id":"5ab2cebb0537866c4a0cd2e2f3502c0976b788da","mail":"7e9d6dbefa72d56056c8c740b34b5c0bbfec8d87"}
+2017-12-25 15:00:01.005351000 +0900 raw.dummy: {"host":"2001:db8:0:8d3:0:8a2e::","member_id":"445514dfcd82b2a8b94ec6763afa6e349e78c5f8","mail":"54608576c8d815a4ffd595a3c1fe72751ed04424"}
+2017-12-25 15:00:02.024865000 +0900 raw.dummy: {"host":"10.102.3.0","member_id":"b14a8f98019ec84c6fe329d5af62c46bb45348f8","mail":"723da8084da3438d9287b44e5a714b70e10a9755"}
+2017-12-25 15:00:03.053852000 +0900 raw.dummy: {"host":"2001:db8:0:8d3:0:8a2e::","member_id":"d38ebb9b96c0cbffd4136935c7f6fe9dd05980cd","mail":"b6f9d777831cbecfd2ea806f5f62f79a275bbb82"}
 ```
 
 ## Parameters
 
-* `md5_keys` `sha1_keys` `sha256_keys` `sha384_keys` `sha512_keys`
+### mask section
+
+Mask section will use following configuratin syntax:
+
+```aconf
+<mask ARGUMENTS>
+  PARAMETERS
+</mask>
+```
+
+### Parameters
+
+* `arguments`
+  * `md5`
+  * `sha1`
+  * `sha256`
+  * `sha384`
+  * `sha512`
+  * `uri_path`
+  * `network`
+
+* `keys`
 
 Specify which hash algorithm to be used for following one or more keys.
 
-* `hash_salt` (default: none)
+* `salt` (default: none)
 
-This salt affects for `md5_keys` `sha1_keys` `sha256_keys` `sha384_keys` `sha512_keys` settings.  
+This salt affects for `keys` settings.
 It is recommend to set a hash salt to prevent rainbow table attacks.
 
 
-* `ipaddr_mask_keys`
-* `ipv4_mask_subnet` (default: 24)
-* `ipv6_mask_subnet` (default: 104)
+* `ipv4_mask_bits` (default: nil)
+* `ipv6_mask_bits` (default: nil)
 
-Round number for following one or more keys. It makes easy to aggregate calculation. 
+Round number for following one or more keys. It makes easy to aggregate calculation.
 
-| ipv4_mask_subnet |      input      |    output     |
+| ipv4_mask_bits   |      input      |    output     |
 |------------------|-----------------|---------------|
 |               24 | 192.168.200.100 | 192.168.200.0 |
 |               16 | 192.168.200.100 | 192.168.0.0   |
 |                8 | 192.168.200.100 | 192.0.0.0     |
 
-* include_tag_key (default: false)
-* tag_key
-
-set one or more option are required for editing tag name using HandleTagNameMixin.
 
 ## Notes
 
