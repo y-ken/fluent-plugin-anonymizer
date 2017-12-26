@@ -83,7 +83,7 @@ $ fluentd -c fluent.conf
 
 ### mask section
 
-Mask section will use following configuratin syntax:
+Mask section will use following configuration syntax:
 
 ```aconf
 <mask ARGUMENTS>
