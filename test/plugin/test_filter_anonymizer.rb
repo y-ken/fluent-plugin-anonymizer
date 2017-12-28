@@ -250,14 +250,22 @@ CONF
     assert_equal(expected, filtered[0])
   end
 
-  def test_filter_nested_keys
+  data("old style" => {
+         "sha1" => "nested.data,nested.nested.data",
+         "network" => "hosts.host1",
+       },
+       "new style" => {
+         "sha1" => "$.nested.data,$.nested.nested.data",
+         "network" => "$.hosts.host1",
+       })
+  def test_filter_nested_keys(data)
     conf = %[
       <mask sha1>
-        keys nested.data,nested.nested.data
+        keys #{data["sha1"]}
         salt ""
       </mask>
       <mask network>
-        keys           hosts.host1
+        keys           #{data["network"]}
         ipv4_mask_bits 16
       </mask>
     ]
