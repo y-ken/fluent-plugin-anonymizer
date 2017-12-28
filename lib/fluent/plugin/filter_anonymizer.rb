@@ -78,7 +78,7 @@ EOF
 
     config_param :salt, :string, default: nil
     config_param :salts, :array, default: nil
-    config_section :mask, param_name: :mask_config_list, required: false, multi: true do
+    config_section :mask, param_name: :mask_config_list, required: true, multi: true do
       config_argument :method, :enum, list: MASK_METHODS.keys
       config_param :salt, :string, default: nil
 
