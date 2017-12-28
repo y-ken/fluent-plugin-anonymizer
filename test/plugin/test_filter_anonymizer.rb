@@ -126,7 +126,7 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     conf = OpenStruct.new(salt: 's')
     plugin = create_driver.instance
     conv = ->(v,salt){ "#{v.upcase}:#{salt}" } # it's dummy for test
-    masker = plugin.masker_for_key_chain(conv, 'a.b.c'.split('.'), conf)
+    masker = plugin.masker_for_key_chain(conv, '$.a.b.c', conf)
     event = {
       'a' => {
         'b' => { 'c' => 'v', 'd' => 'v' }

@@ -141,8 +141,11 @@ EOF
 
         conv = MASK_METHODS[c.method].call(c)
         [*c.keys].compact.each do |key|
+          if key.include?('.') && !key.start_with?('$[')
+            key = "$.#{key}" unless key.start_with?('$.')
+          end
           if key.split('.').length > 1
-            @masks << masker_for_key_chain(conv, key.split('.'), c)
+            @masks << masker_for_key_chain(conv, key, c)
           else
             @masks << masker_for_key(conv, key, c)
           end
@@ -162,7 +165,7 @@ EOF
         conv = MASK_METHODS[:network].call(conf)
         @ipaddr_mask_keys.split(',').map(&:strip).each do |key|
           if key.include?('.')
-            @masks << masker_for_key_chain(conv, key.split('.'), conf)
+            @masks << masker_for_key_chain(conv, key, conf)
           else
             @masks << masker_for_key(conv, key, conf)
           end
@@ -231,21 +234,17 @@ EOF
       end
     end
 
-    def masker_for_key_chain(conv, key_chain, opts)
+    def masker_for_key_chain(conv, key, opts)
       for_each = opts.mask_array_elements
-      heading = key_chain[0..-2]
-      container_fetcher = ->(record){
-        heading.reduce(record){|r,c|
-          container = record_accessor_create(c)
-          container.call(r)
-        }
-      }
-      tailing = key_chain[-1]
+      accessor = record_accessor_create(key)
       ->(record){
         begin
-          container = container_fetcher.call(record)
-          accessor = record_accessor_create(tailing)
-          if raw_value = accessor.call(container)
+          raw_value = accessor.call(record)
+          keys = accessor.instance_variable_get(:@keys)
+          heading = keys[0..-2]
+          container = record.dig(*heading)
+          tailing = keys.last
+          if raw_value
             container[tailing] = mask_value(raw_value, for_each){|v| conv.call(v, opts.salt || salt_determine(tailing)) }
           end
         rescue => e
