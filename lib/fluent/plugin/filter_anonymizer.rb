@@ -164,6 +164,9 @@ EOF
         conf.ipv6_mask_bits = @ipv6_mask_subnet
         conv = MASK_METHODS[:network].call(conf)
         @ipaddr_mask_keys.split(',').map(&:strip).each do |key|
+          if key.include?('.') && !key.start_with?('$[')
+            key = "$.#{key}" unless key.start_with?('$.')
+          end
           if key.include?('.') || key.start_with?('$[') || key.start_with?('$.')
             @masks << masker_for_key_chain(conv, key, conf)
           else
