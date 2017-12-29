@@ -191,7 +191,7 @@ EOF
     end
 
     def mask_with_key_chain?(key)
-      key.include?('.') || key.start_with?('$[') || key.start_with?('$.')
+      key.include?('.') || key.start_with?('$[', '$.')
     end
 
     def salt_determine(key)
