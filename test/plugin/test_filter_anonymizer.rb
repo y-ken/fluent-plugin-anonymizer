@@ -51,6 +51,35 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     filtered.map {|m| m.last }
   end
 
+  data("plain" => {"key" => "plain",
+                   "expected" => "plain"},
+       "nested" => {"key" => "nested.key",
+                    "expected" => "$.nested.key"},
+       "nested_nested" => {"key" => "nested.nested.key",
+                           "expected" => "$.nested.nested.key"},
+      )
+  def test_convert_compat_key(data)
+    d = create_driver
+    actual = d.instance.convert_compat_key(data["key"])
+    assert_equal(data["expected"], actual)
+  end
+
+  data("plain" => {"key" => "plain",
+                   "expected" => false},
+       "nested" => {"key" => "nested.key",
+                    "expected" => true},
+       "nested_nested" => {"key" => "nested.nested.key",
+                           "expected" => true},
+       "bracket" => {"key" => "$['nested']['nested']['key']",
+                     "expected" => true},
+      )
+  def test_mask_with_key_chain?(data)
+    d = create_driver
+    key = d.instance.convert_compat_key(data["key"])
+    actual = d.instance.mask_with_key_chain?(key)
+    assert_equal(data["expected"], actual)
+  end
+
   require 'ostruct'
   test 'method md5 works correctly' do
     conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:md5].call(OpenStruct.new)

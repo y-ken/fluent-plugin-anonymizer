@@ -141,10 +141,8 @@ EOF
 
         conv = MASK_METHODS[c.method].call(c)
         [*c.keys].compact.each do |key|
-          if key.include?('.') && !key.start_with?('$[')
-            key = "$.#{key}" unless key.start_with?('$.')
-          end
-          if key.include?('.') || key.start_with?('$[') || key.start_with?('$.')
+          key = convert_compat_key(key)
+          if mask_with_key_chain?(key)
             @masks << masker_for_key_chain(conv, key, c)
           else
             @masks << masker_for_key(conv, key, c)
@@ -164,10 +162,8 @@ EOF
         conf.ipv6_mask_bits = @ipv6_mask_subnet
         conv = MASK_METHODS[:network].call(conf)
         @ipaddr_mask_keys.split(',').map(&:strip).each do |key|
-          if key.include?('.') && !key.start_with?('$[')
-            key = "$.#{key}" unless key.start_with?('$.')
-          end
-          if key.include?('.') || key.start_with?('$[') || key.start_with?('$.')
+          key = convert_compat_key(key)
+          if mask_with_key_chain?(key)
             @masks << masker_for_key_chain(conv, key, conf)
           else
             @masks << masker_for_key(conv, key, conf)
@@ -185,6 +181,17 @@ EOF
 
     def filter(tag, time, record)
       record.update(@masks.reduce(record){|r,mask| mask.call(r)})
+    end
+
+    def convert_compat_key(key)
+      if key.include?('.') && !key.start_with?('$[')
+        key = "$.#{key}" unless key.start_with?('$.')
+      end
+      key
+    end
+
+    def mask_with_key_chain?(key)
+      key.include?('.') || key.start_with?('$[') || key.start_with?('$.')
     end
 
     def salt_determine(key)
