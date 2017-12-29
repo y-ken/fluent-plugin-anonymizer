@@ -257,7 +257,12 @@ CONF
        "new style" => {
          "sha1" => "$.nested.data,$.nested.nested.data",
          "network" => "$.hosts.host1",
-       })
+       },
+       "bracket style"=> {
+         "sha1" => "$['nested']['data'],$['nested']['nested']['data']",
+         "network" => "$['hosts']['host1']",
+       }
+      )
   def test_filter_nested_keys(data)
     conf = %[
       <mask sha1>
