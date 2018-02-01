@@ -9,14 +9,31 @@ class AnonymizerFilterTest < Test::Unit::TestCase
   end
 
   CONFIG = %[
-    md5_keys          data_for_md5
-    sha1_keys         data_for_sha1
-    sha256_keys       data_for_sha256
-    sha384_keys       data_for_sha384
-    sha512_keys       data_for_sha512
-    hash_salt         test_salt_string
-    ipaddr_mask_keys  host
-    ipv4_mask_subnet  24
+    <mask md5>
+      keys data_for_md5
+      salt test_salt_string
+    </mask>
+    <mask sha1>
+      keys data_for_sha1
+      salt test_salt_string
+    </mask>
+    <mask sha256>
+      keys data_for_sha256
+      salt test_salt_string
+    </mask>
+    <mask sha384>
+      keys data_for_sha384
+      salt test_salt_string
+    </mask>
+    <mask sha512>
+      keys data_for_sha512
+      salt test_salt_string
+    </mask>
+    <mask network>
+      keys           host
+      ipv4_mask_bits 24
+      salt           test_salt_string
+    </mask>
   ]
 
   def create_driver(conf=CONFIG)
@@ -32,6 +49,35 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     }
     filtered = d.filtered
     filtered.map {|m| m.last }
+  end
+
+  data("plain" => {"key" => "plain",
+                   "expected" => "plain"},
+       "nested" => {"key" => "nested.key",
+                    "expected" => "$.nested.key"},
+       "nested_nested" => {"key" => "nested.nested.key",
+                           "expected" => "$.nested.nested.key"},
+      )
+  def test_convert_compat_key(data)
+    d = create_driver
+    actual = d.instance.convert_compat_key(data["key"])
+    assert_equal(data["expected"], actual)
+  end
+
+  data("plain" => {"key" => "plain",
+                   "expected" => false},
+       "nested" => {"key" => "nested.key",
+                    "expected" => true},
+       "nested_nested" => {"key" => "nested.nested.key",
+                           "expected" => true},
+       "bracket" => {"key" => "$['nested']['nested']['key']",
+                     "expected" => true},
+      )
+  def test_mask_with_key_chain?(data)
+    d = create_driver
+    key = d.instance.convert_compat_key(data["key"])
+    actual = d.instance.mask_with_key_chain?(key)
+    assert_equal(data["expected"], actual)
   end
 
   require 'ostruct'
@@ -89,7 +135,7 @@ class AnonymizerFilterTest < Test::Unit::TestCase
       d = create_driver('unknown_keys')
     }
     d = create_driver(CONFIG)
-    assert_equal 'test_salt_string', d.instance.config['hash_salt']
+    assert_equal 'test_salt_string', d.instance.mask_config_list.first['salt']
   end
 
   test 'masker_for_key generates a lambda for conversion with exact key match' do
@@ -109,7 +155,7 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     conf = OpenStruct.new(salt: 's')
     plugin = create_driver.instance
     conv = ->(v,salt){ "#{v.upcase}:#{salt}" } # it's dummy for test
-    masker = plugin.masker_for_key_chain(conv, 'a.b.c'.split('.'), conf)
+    masker = plugin.masker_for_key_chain(conv, '$.a.b.c', conf)
     event = {
       'a' => {
         'b' => { 'c' => 'v', 'd' => 'v' }
@@ -168,7 +214,7 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     plugin = create_driver(<<-CONF).instance
       <mask md5>
         salt testing
-        key  test
+        keys test
       </mask>
 CONF
     r = plugin.filter('tag', Time.now.to_i, {"test" => "value", "name" => "fluentd plugin"})
@@ -202,9 +248,14 @@ CONF
 
   def test_filter_multi_keys
     conf = %[
-      sha1_keys         member_id, mail, telephone
-      ipaddr_mask_keys  host, host2
-      ipv4_mask_subnet  16
+      <mask sha1>
+        keys member_id, mail, telephone
+        salt ""
+      </mask>
+      <mask network>
+        keys           host, host2
+        ipv4_mask_bits 16
+      </mask>
     ]
     messages = [
       {
@@ -228,11 +279,29 @@ CONF
     assert_equal(expected, filtered[0])
   end
 
-  def test_filter_nested_keys
+  data("old style" => {
+         "sha1" => "nested.data,nested.nested.data",
+         "network" => "hosts.host1",
+       },
+       "new style" => {
+         "sha1" => "$.nested.data,$.nested.nested.data",
+         "network" => "$.hosts.host1",
+       },
+       "bracket style"=> {
+         "sha1" => "$['nested']['data'],$['nested']['nested']['data']",
+         "network" => "$['hosts']['host1']",
+       }
+      )
+  def test_filter_nested_keys(data)
     conf = %[
-      sha1_keys         nested.data,nested.nested.data
-      ipaddr_mask_keys  hosts.host1
-      ipv4_mask_subnet  16
+      <mask sha1>
+        keys #{data["sha1"]}
+        salt ""
+      </mask>
+      <mask network>
+        keys           #{data["network"]}
+        ipv4_mask_bits 16
+      </mask>
     ]
     messages = [
       {
@@ -264,8 +333,15 @@ CONF
 
   def test_filter_nest_value
     conf = %[
-      sha1_keys         array,hash
-      ipaddr_mask_keys  host
+      <mask sha1>
+        keys                array, hash
+        mask_array_elements true
+        salt                ""
+      </mask>
+      <mask network>
+        keys           host
+        ipv4_mask_bits 24
+      </mask>
     ]
     messages = [
       {
@@ -285,9 +361,11 @@ CONF
 
   def test_filter_ipv6
     conf = %[
-      ipaddr_mask_keys  host
-      ipv4_mask_subnet  24
-      ipv6_mask_subnet  104
+      <mask network>
+        keys           host
+        ipv4_mask_bits 24
+        ipv6_mask_bits 104
+      </mask>
     ]
     messages = [
       { 'host' => '10.102.3.80' },

@@ -32,6 +32,8 @@ module Fluent::Plugin
   class AnonymizerFilter < Filter
     Fluent::Plugin.register_filter('anonymizer', self)
 
+    helpers :record_accessor
+
     MASK_METHODS = {
       md5:    ->(opts){ ->(v,salt){ OpenSSL::Digest.new("md5").update(salt).update(v.to_s).hexdigest } },
       sha1:   ->(opts){ ->(v,salt){ OpenSSL::Digest.new("sha1").update(salt).update(v.to_s).hexdigest } },
@@ -66,16 +68,27 @@ module Fluent::Plugin
         } },
     }
 
+    OBSOLETED_MASK_METHOD_PARAMS_MESSAGE = <<EOF
+Use
+<mask MASK_METHOD>
+  # ...
+</mask>
+instead.
+EOF
+
     config_param :salt, :string, default: nil
     config_param :salts, :array, default: nil
-    config_section :mask, param_name: :mask_config_list, required: false, multi: true do
+    config_section :mask, param_name: :mask_config_list, required: true, multi: true do
       config_argument :method, :enum, list: MASK_METHODS.keys
       config_param :salt, :string, default: nil
 
-      config_param :key,             :string, default: nil
+      config_param :key,             :string, default: nil,
+                   obsoleted: "Use keys parameter instead."
       config_param :keys,            :array,  default: []
-      config_param :key_chain,       :string, default: nil # for.nested.key
-      config_param :key_chains,      :array,  default: []  # ["for.nested.key","can.be.specified","twice.or.more"]
+      config_param :key_chain,       :string, default: nil, # for.nested.key
+                   obsoleted: "Use keys parameter instead."
+      config_param :key_chains,      :array,  default: [],  # ["for.nested.key","can.be.specified","twice.or.more"]
+                   obsoleted: "Use keys parameter instead."
       config_param :key_pattern,     :string, default: nil
       config_param :value_pattern,   :string, default: nil
       config_param :value_in_subnet, :string, default: nil # 192.168.0.0/24
@@ -86,15 +99,24 @@ module Fluent::Plugin
     end
 
     # obsolete configuration parameters
-    config_param :md5_keys,    :string, default: nil
-    config_param :sha1_keys,   :string, default: nil
-    config_param :sha256_keys, :string, default: nil
-    config_param :sha384_keys, :string, default: nil
-    config_param :sha512_keys, :string, default: nil
-    config_param :hash_salt,   :string, default: nil
-    config_param :ipaddr_mask_keys, :string, default: nil
-    config_param :ipv4_mask_subnet, :integer, default: 24
-    config_param :ipv6_mask_subnet, :integer, default: 104
+    config_param :md5_keys,    :string, default: nil,
+                 obsoleted: OBSOLETED_MASK_METHOD_PARAMS_MESSAGE
+    config_param :sha1_keys,   :string, default: nil,
+                 obsoleted: OBSOLETED_MASK_METHOD_PARAMS_MESSAGE
+    config_param :sha256_keys, :string, default: nil,
+                 obsoleted: OBSOLETED_MASK_METHOD_PARAMS_MESSAGE
+    config_param :sha384_keys, :string, default: nil,
+                 obsoleted: OBSOLETED_MASK_METHOD_PARAMS_MESSAGE
+    config_param :sha512_keys, :string, default: nil,
+                 obsoleted: OBSOLETED_MASK_METHOD_PARAMS_MESSAGE
+    config_param :hash_salt,   :string, default: nil,
+                 obsoleted: "Use salt parameter in mask directive instead."
+    config_param :ipaddr_mask_keys, :string, default: nil,
+                 obsoleted: "Use keys parameter in mask directive instead."
+    config_param :ipv4_mask_subnet, :integer, default: 24,
+                 obsoleted: "Use ipv4_mask_bits in mask directive instead."
+    config_param :ipv6_mask_subnet, :integer, default: 104,
+                 obsoleted: "Use ipv6_mask_bits in mask directive instead."
 
     def initialize
       super
@@ -118,33 +140,19 @@ module Fluent::Plugin
         end
 
         conv = MASK_METHODS[c.method].call(c)
-        [c.key || nil, *c.keys].compact.each do |key|
-          @masks << masker_for_key(conv, key, c)
-        end
-        [c.key_chain || nil, *c.key_chains].compact.each do |key_chain|
-          @masks << masker_for_key_chain(conv, key_chain.split('.'), c)
+        [*c.keys].compact.each do |key|
+          key = convert_compat_key(key)
+          if mask_with_key_chain?(key)
+            @masks << masker_for_key_chain(conv, key, c)
+          else
+            @masks << masker_for_key(conv, key, c)
+          end
         end
         @masks << masker_for_key_pattern(conv, c.key_pattern, c) if c.key_pattern
         @masks << masker_for_value_pattern(conv, c.value_pattern, c) if c.value_pattern
         @masks << masker_for_value_in_subnet(conv, c.value_in_subnet, c) if c.value_in_subnet
       end
 
-      # obsolete option handling
-      [[@md5_keys,:md5],[@sha1_keys,:sha1],[@sha256_keys,:sha256],[@sha384_keys,:sha384],[@sha512_keys,:sha512]].each do |param,m|
-        next unless param
-        @salt_list << (@hash_salt || '') if @salt_list.empty? # to suppress ConfigError for salt missing
-        conf = OpenStruct.new
-        conf.salt = @hash_salt || ''
-        conf.mask_array_elements = true
-        conv = MASK_METHODS[m].call(conf)
-        param.split(',').map(&:strip).each do |key|
-          if key.include?('.')
-            @masks << masker_for_key_chain(conv, key.split('.'), conf)
-          else
-            @masks << masker_for_key(conv, key, conf)
-          end
-        end
-      end
       if @ipaddr_mask_keys
         @salt_list << (@hash_salt || '') if @salt_list.empty? # to suppress ConfigError for salt missing
         conf = OpenStruct.new
@@ -154,8 +162,9 @@ module Fluent::Plugin
         conf.ipv6_mask_bits = @ipv6_mask_subnet
         conv = MASK_METHODS[:network].call(conf)
         @ipaddr_mask_keys.split(',').map(&:strip).each do |key|
-          if key.include?('.')
-            @masks << masker_for_key_chain(conv, key.split('.'), conf)
+          key = convert_compat_key(key)
+          if mask_with_key_chain?(key)
+            @masks << masker_for_key_chain(conv, key, conf)
           else
             @masks << masker_for_key(conv, key, conf)
           end
@@ -172,6 +181,17 @@ module Fluent::Plugin
 
     def filter(tag, time, record)
       record.update(@masks.reduce(record){|r,mask| mask.call(r)})
+    end
+
+    def convert_compat_key(key)
+      if key.include?('.') && !key.start_with?('$[')
+        key = "$.#{key}" unless key.start_with?('$.')
+      end
+      key
+    end
+
+    def mask_with_key_chain?(key)
+      key.include?('.') || key.start_with?('$[', '$.')
     end
 
     def salt_determine(key)
@@ -198,11 +218,12 @@ module Fluent::Plugin
     def masker_for_key(conv, key, opts)
       for_each = opts.mask_array_elements
       salt = opts.salt || salt_determine(key)
+      accessor = record_accessor_create(key)
       if for_each
         ->(record){
           begin
-            if record.has_key?(key)
-              record[key] = mask_value(record[key], for_each){|v| conv.call(v, salt) }
+            if raw_value = accessor.call(record)
+              record[key] = mask_value(raw_value, for_each){|v| conv.call(v, salt) }
             end
           rescue => e
             log.error "unexpected error while masking value", error_class: e.class, error: e.message
@@ -212,8 +233,8 @@ module Fluent::Plugin
       else
         ->(record){
           begin
-            if record.has_key?(key)
-              record[key] = conv.call(record[key], salt)
+            if raw_value = accessor.call(record)
+              record[key] = conv.call(raw_value, salt)
             end
           rescue => e
             log.error "unexpected error while masking value", error_class: e.class, error: e.message
@@ -223,16 +244,18 @@ module Fluent::Plugin
       end
     end
 
-    def masker_for_key_chain(conv, key_chain, opts)
+    def masker_for_key_chain(conv, key, opts)
       for_each = opts.mask_array_elements
-      heading = key_chain[0..-2]
-      container_fetcher = ->(record){ heading.reduce(record){|r,c| r && r.has_key?(c) ? r[c] : nil } }
-      tailing = key_chain[-1]
+      accessor = record_accessor_create(key)
       ->(record){
         begin
-          container = container_fetcher.call(record)
-          if container && container.has_key?(tailing)
-            container[tailing] = mask_value(container[tailing], for_each){|v| conv.call(v, opts.salt || salt_determine(tailing)) }
+          raw_value = accessor.call(record)
+          keys = accessor.instance_variable_get(:@keys)
+          heading = keys[0..-2]
+          container = record.dig(*heading)
+          tailing = keys.last
+          if raw_value
+            container[tailing] = mask_value(raw_value, for_each){|v| conv.call(v, opts.salt || salt_determine(tailing)) }
           end
         rescue => e
           log.error "unexpected error while masking value", error_class: e.class, error: e.message
