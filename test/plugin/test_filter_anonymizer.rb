@@ -1,5 +1,6 @@
 require 'helper'
 require 'fluent/test/driver/filter'
+require 'fluent/plugin/filter_anonymizer'
 
 class AnonymizerFilterTest < Test::Unit::TestCase
   def setup
