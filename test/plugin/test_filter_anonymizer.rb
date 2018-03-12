@@ -128,15 +128,23 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     assert_equal '2001:db8:0:8d3:0:8a2e::', conv.call('2001:db8:0:8d3:0:8a2e:70:7344', '')
   end
 
-  def test_configure
-    assert_raise(Fluent::ConfigError) {
-      d = create_driver('')
-    }
-    assert_raise(Fluent::ConfigError) {
-      d = create_driver('unknown_keys')
-    }
-    d = create_driver(CONFIG)
-    assert_equal 'test_salt_string', d.instance.mask_config_list.first['salt']
+  sub_test_case "configure" do
+    test "empty config" do
+      assert_raise(Fluent::ConfigError) {
+        create_driver('')
+      }
+    end
+
+    test "unknown keys" do
+      assert_raise(Fluent::ConfigError) {
+        create_driver('unknown_keys')
+      }
+    end
+
+    test "basic config" do
+      d = create_driver(CONFIG)
+      assert_equal 'test_salt_string', d.instance.mask_config_list.first['salt']
+    end
   end
 
   test 'masker_for_key generates a lambda for conversion with exact key match' do
