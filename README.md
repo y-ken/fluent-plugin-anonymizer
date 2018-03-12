@@ -16,18 +16,18 @@ Fluentd filter plugin to anonymize records with [OpenSSL::Digest](https://docs.r
 
 install with gem or td-agent-gem command as:
 
-`````
+```
 # for system installed fluentd
 $ gem install fluent-plugin-anonymizer
 
 # for td-agent2 (with fluentd v0.12)
 $ sudo td-agent-gem install fluent-plugin-anonymizer -v 0.5.1
 
-# for td-agent3 (with fluentd v0.14)
+# for td-agent3 (with fluentd v1.0)
 $ sudo td-agent-gem install fluent-plugin-anonymizer -v 1.0.0
-`````
+```
 
-For more details, see [Plugin Management](https://docs.fluentd.org/v0.14/articles/plugin-management)
+For more details, see [Plugin Management](https://docs.fluentd.org/v1.0/articles/plugin-management)
 
 ## Tutorial
 
@@ -91,7 +91,7 @@ Mask section will use following configuration syntax:
 </mask>
 ```
 
-### Parameters
+#### Parameters
 
 * `arguments`
   * `md5`
@@ -102,15 +102,30 @@ Mask section will use following configuration syntax:
   * `uri_path`
   * `network`
 
-* `keys`
+* `keys` (default: [])
 
-Specify which hash algorithm to be used for following one or more keys.
+Specify one or more keys that will be applied hash algorithm.
+
+* `key_pattern` (default: nil)
+
+Specify pattern of keys that will be applied hash algorithm.
+
+* `value_pattern` (default: nil)
+
+Specify pattern of value that will be applied hash algorithm.
+
+* `value_in_subnet` (default: nil)
+
+Specify network of value that will be applied hash algorithm.
 
 * `salt` (default: none)
 
 This salt affects for `keys` settings.
 It is recommend to set a hash salt to prevent rainbow table attacks.
 
+* `mask_array_elements` (default: false)
+
+If true, mask all elements in the array that specified by keys or key_pattern.
 
 * `ipv4_mask_bits` (default: nil)
 * `ipv6_mask_bits` (default: nil)
