@@ -143,6 +143,25 @@ Round number for following one or more keys. It makes easy to aggregate calculat
 
 * hashing nested value behavior is compatible with [LogStash::Filters::Anonymize](https://github.com/logstash/logstash/blob/master/lib/logstash/filters/anonymize.rb) does. For further details, please check it out the test code at [test_emit_nest_value](https://github.com/y-ken/fluent-plugin-anonymizer/blob/master/test/plugin/test_filter_anonymizer.rb#L231).
 
+* How to reproduce anonymized string with another way?
+
+You can reproduce same result with both ways.
+
+```
+<filter raw.**>
+  @type anonymizer
+  <mask sha512>
+    keys email_for_sha512
+    salt 
+  </mask>
+</filter>
+```
+
+```
+$ echo -n "example@gmail.com" | openssl sha512
+(stdin)= 7759b39ee43dda414560836863675714eb2040e8c305cb4180fc850937ccbfcfc0c2fcab65ca8509a861b1703a33678b330c418263e9a29f80747102f972cee0
+```
+
 ## Blog Articles
 
 * 個人情報を難読化するfluent-plugin-anonymizerをリリースしました #fluentd - Y-Ken Studio  
