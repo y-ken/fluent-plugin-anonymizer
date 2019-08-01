@@ -141,7 +141,7 @@ Round number for following one or more keys. It makes easy to aggregate calculat
 
 ## Notes
 
-* hashing nested value behavior is compatible with [LogStash::Filters::Anonymize](https://github.com/logstash/logstash/blob/master/lib/logstash/filters/anonymize.rb) does. For further details, please check it out the test code at [test_emit_nest_value](https://github.com/y-ken/fluent-plugin-anonymizer/blob/master/test/plugin/test_filter_anonymizer.rb#L231).
+* hashing nested value behavior is compatible with [LogStash::Filters::Anonymize](https://github.com/logstash-plugins/logstash-filter-anonymize/blob/master/lib/logstash/filters/anonymize.rb) does. For further details, please check it out the test code at [test_emit_nest_value](https://github.com/y-ken/fluent-plugin-anonymizer/blob/master/test/plugin/test_filter_anonymizer.rb#L231).
 
 * How to reproduce anonymized string with another way?
 
