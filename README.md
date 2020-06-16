@@ -57,8 +57,8 @@ For more details, see [Plugin Management](https://docs.fluentd.org/v1.0/articles
   # Specify rounding address keys with comma and subnet mask
   <mask network>
     keys  host
-    ipv4_mask_subnet  24
-    ipv6_mask_subnet  104
+    ipv4_mask_bits  24
+    ipv6_mask_bits  104
   </mask>
 </filter>
 
