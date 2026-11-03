@@ -114,6 +114,25 @@ Specify pattern of keys that will be applied hash algorithm.
 
 Specify pattern of value that will be applied hash algorithm.
 
+* `mask_matched_part` (default: false)
+
+If true, `value_pattern` masks only the parts of a string value that match the pattern, and keeps the rest.
+If false, it masks the whole value that matches.
+A value that is not a string, such as a number, is masked as a whole even when this is true.
+This needs `value_pattern`.
+
+For example, with this configuration:
+
+```aconf
+<mask sha1>
+  value_pattern UserId:\d{3}-?\d{3}
+  mask_matched_part true
+  salt mysaltstring
+</mask>
+```
+
+`{"msg":"Logged in UserId:123-456"}` becomes `{"msg":"Logged in e92ef169c532aea0e69c400d5c72a0c09b1d793d"}`. Only `UserId:123-456` is replaced with its hash.
+
 * `value_in_subnet` (default: nil)
 
 Specify network of value that will be applied hash algorithm.

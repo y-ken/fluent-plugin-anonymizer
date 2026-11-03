@@ -15,6 +15,7 @@ require 'ipaddr'
 #     key_pattern   ^(source|src)_?ip_?(addr|address)?$
 #     value_pattern   @mydomain\.example\.com$
 #     value_in_subnet 192.168.0.0/16 # naming?
+#     mask_matched_part true # mask only the parts that match value_pattern
 #   </mask>
 #   <mask uri_path>
 #     keys ["url","uri"]
@@ -126,6 +127,7 @@ EOF
       config_param :key_pattern,     :string, default: nil
       config_param :value_pattern,   :string, default: nil
       config_param :value_in_subnet, :string, default: nil # 192.168.0.0/24
+      config_param :mask_matched_part, :bool, default: false # mask only the parts that match value_pattern
 
       config_param :mask_array_elements, :bool, default: false
       config_param :ipv4_mask_bits, :integer, default: nil
@@ -171,6 +173,9 @@ EOF
       @mask_config_list.each do |c|
         unless c.salt || @salt_list.size > 0
           salt_missing = true
+        end
+        if c.mask_matched_part && !c.value_pattern
+          raise Fluent::ConfigError, "mask_matched_part requires value_pattern"
         end
 
         conv = MASK_METHODS[c.method].call(c)
@@ -316,11 +321,19 @@ EOF
 
     def masker_for_value_pattern(conv, pattern, opts)
       regexp = Regexp.new(pattern)
+      matched_part = opts.mask_matched_part
       ->(record){
         begin
           record.each_pair do |key, value|
             next unless (regexp =~ self.class.stringify(value) rescue nil)
-            record[key] = conv.call(value, opts.salt || salt_determine(key))
+            salt = opts.salt || salt_determine(key)
+            record[key] = if matched_part && value.is_a?(String)
+                            # Mask each match and keep the rest. Skip empty matches,
+                            # which would insert a masked value between characters.
+                            value.gsub(regexp) {|part| part.empty? ? part : conv.call(part, salt) }
+                          else
+                            conv.call(value, salt)
+                          end
           end
         rescue => e
           log.error "unexpected error while masking value", error_class: e.class, error: e.message

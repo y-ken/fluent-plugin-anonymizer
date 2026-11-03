@@ -128,6 +128,51 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     assert_equal '2001:db8:0:8d3:0:8a2e::', conv.call('2001:db8:0:8d3:0:8a2e:70:7344', '')
   end
 
+  sub_test_case "mask_matched_part" do
+    test "masks only the matched part of the value" do
+      conf = %[
+        <mask sha1>
+          value_pattern UserId:\\d{3}-?\\d{3}
+          mask_matched_part true
+          salt mysaltstring
+        </mask>
+      ]
+      messages = [
+        {"level" => "INFO", "msg" => "Logged in UserId:123-456"},
+        {"level" => "INFO", "msg" => "UserId:111222 and UserId:333-444"},
+      ]
+      sha1 = ->(v){ OpenSSL::Digest.new("sha1").update("mysaltstring").update(v).hexdigest }
+      filtered = filter(conf, messages)
+      assert_equal({"level" => "INFO", "msg" => "Logged in e92ef169c532aea0e69c400d5c72a0c09b1d793d"}, filtered[0])
+      assert_equal sha1.call("UserId:123-456"), "e92ef169c532aea0e69c400d5c72a0c09b1d793d"
+      assert_equal({"level" => "INFO", "msg" => "#{sha1.call("UserId:111222")} and #{sha1.call("UserId:333-444")}"}, filtered[1])
+    end
+
+    test "masks the whole value by default" do
+      conf = %[
+        <mask sha1>
+          value_pattern UserId:\\d{3}-?\\d{3}
+          salt mysaltstring
+        </mask>
+      ]
+      filtered = filter(conf, [{"msg" => "Logged in UserId:123-456"}])
+      expected = OpenSSL::Digest.new("sha1").update("mysaltstring").update("Logged in UserId:123-456").hexdigest
+      assert_equal({"msg" => expected}, filtered[0])
+    end
+
+    test "requires value_pattern" do
+      assert_raise(Fluent::ConfigError) do
+        create_driver(%[
+          <mask sha1>
+            keys msg
+            mask_matched_part true
+            salt mysaltstring
+          </mask>
+        ])
+      end
+    end
+  end
+
   sub_test_case "configure" do
     test "empty config" do
       assert_raise(Fluent::ConfigError) {
@@ -228,6 +273,38 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     assert_equal '{:sym=>1, :"foo bar"=>"x", 1=>2, nil=>true}',
                  stringify.call({:sym => 1, :"foo bar" => "x", 1 => 2, nil => true})
     assert_equal '{"q\\"d"=>"new\\nline"}', stringify.call({"q\"d" => "new\nline"})
+  end
+
+  test 'masker_for_value_pattern with mask_matched_part masks only the matched parts' do
+    conf = OpenStruct.new(salt: 's', mask_matched_part: true)
+    plugin = create_driver.instance
+    conv = ->(v,salt){ "#{v.upcase}:#{salt}" } # it's dummy for test
+    masker = plugin.masker_for_value_pattern(conv, 'x+', conf)
+    r = masker.call({"k" => "x", "kk" => "a xx b x", "kkk" => "abc", "n" => 0})
+    assert_equal "X:s", r["k"]
+    assert_equal "a XX:s b X:s", r["kk"]
+    assert_equal "abc", r["kkk"]
+    assert_equal 0, r["n"]
+    assert_equal 4, r.size
+  end
+
+  test 'masker_for_value_pattern with mask_matched_part skips empty matches' do
+    conf = OpenStruct.new(salt: 's', mask_matched_part: true)
+    plugin = create_driver.instance
+    conv = ->(v,salt){ "#{v.upcase}:#{salt}" } # it's dummy for test
+    masker = plugin.masker_for_value_pattern(conv, 'x*', conf)
+    r = masker.call({"k" => "abc", "kk" => "axxb"})
+    assert_equal "abc", r["k"]
+    assert_equal "aXX:sb", r["kk"]
+  end
+
+  test 'masker_for_value_pattern with mask_matched_part masks a value that is not a string as a whole' do
+    conf = OpenStruct.new(salt: 's', mask_matched_part: true)
+    plugin = create_driver.instance
+    conv = ->(v,salt){ "#{v.to_s.upcase}:#{salt}" } # it's dummy for test
+    masker = plugin.masker_for_value_pattern(conv, '\d{3}', conf)
+    r = masker.call({"n" => 123456})
+    assert_equal "123456:s", r["n"]
   end
 
   test 'masker_for_value_in_subnet' do
