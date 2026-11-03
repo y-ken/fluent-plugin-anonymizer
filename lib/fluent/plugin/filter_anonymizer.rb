@@ -34,12 +34,46 @@ module Fluent::Plugin
 
     helpers :record_accessor
 
+    # Returns the string that a value is masked as. A Hash or an Array is
+    # written as Hash#inspect and Array#inspect wrote it before Ruby 3.4,
+    # which changed {"a"=>1} to {"a" => 1}, so that its digest does not change
+    # with the Ruby version.
+    def self.stringify(v)
+      case v
+      when String then v
+      when Hash, Array then append_inspect(+"", v)
+      else v.to_s
+      end
+    end
+
+    def self.append_inspect(buf, v)
+      case v
+      when Hash
+        buf << "{"
+        v.each_with_index do |(key, value), i|
+          buf << ", " if i > 0
+          append_inspect(buf, key) << "=>"
+          append_inspect(buf, value)
+        end
+        buf << "}"
+      when Array
+        buf << "["
+        v.each_with_index do |e, i|
+          buf << ", " if i > 0
+          append_inspect(buf, e)
+        end
+        buf << "]"
+      else
+        buf << v.inspect
+      end
+    end
+
     MASK_METHODS = {
-      md5:    ->(opts){ ->(v,salt){ OpenSSL::Digest.new("md5").update(salt).update(v.to_s).hexdigest } },
-      sha1:   ->(opts){ ->(v,salt){ OpenSSL::Digest.new("sha1").update(salt).update(v.to_s).hexdigest } },
-      sha256: ->(opts){ ->(v,salt){ OpenSSL::Digest.new("sha256").update(salt).update(v.to_s).hexdigest } },
-      sha384: ->(opts){ ->(v,salt){ OpenSSL::Digest.new("sha384").update(salt).update(v.to_s).hexdigest } },
-      sha512: ->(opts){ ->(v,salt){ OpenSSL::Digest.new("sha512").update(salt).update(v.to_s).hexdigest } },
+      md5:    ->(opts){ ->(v,salt){ OpenSSL::Digest.new("md5").update(salt).update(stringify(v)).hexdigest } },
+      sha1:   ->(opts){ ->(v,salt){ OpenSSL::Digest.new("sha1").update(salt).update(stringify(v)).hexdigest } },
+      sha256: ->(opts){ ->(v,salt){ OpenSSL::Digest.new("sha256").update(salt).update(stringify(v)).hexdigest } },
+      sha384: ->(opts){ ->(v,salt){ OpenSSL::Digest.new("sha384").update(salt).update(stringify(v)).hexdigest } },
+      sha512: ->(opts){ ->(v,salt){ OpenSSL::Digest.new("sha512").update(salt).update(stringify(v)).hexdigest } },
       uri_path: ->(opts){ ->(v,salt){
           begin
             uri = URI.parse(v)
@@ -285,7 +319,7 @@ EOF
       ->(record){
         begin
           record.each_pair do |key, value|
-            next unless (regexp =~ value.to_s rescue nil)
+            next unless (regexp =~ self.class.stringify(value) rescue nil)
             record[key] = conv.call(value, opts.salt || salt_determine(key))
           end
         rescue => e

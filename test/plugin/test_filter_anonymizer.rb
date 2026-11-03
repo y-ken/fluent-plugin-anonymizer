@@ -205,6 +205,31 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     assert_equal 6, r.size
   end
 
+  test 'masker_for_value_pattern matches a Hash in the format before Ruby 3.4' do
+    conf = OpenStruct.new(salt: 's')
+    plugin = create_driver.instance
+    conv = ->(v,salt){ "masked:#{salt}" } # it's dummy for test
+    masker = plugin.masker_for_value_pattern(conv, '"k"=>"v"', conf)
+    r = masker.call({"h" => {"k" => "v"}, "s" => "x"})
+    assert_equal "masked:s", r["h"]
+    assert_equal "x", r["s"]
+  end
+
+  test 'stringify writes a Hash and an Array as Ruby 3.3 inspects them' do
+    stringify = Fluent::Plugin::AnonymizerFilter.method(:stringify)
+    assert_equal 'abc', stringify.call('abc')
+    assert_equal '12', stringify.call(12)
+    assert_equal '', stringify.call(nil)
+    assert_equal '{}', stringify.call({})
+    assert_equal '[]', stringify.call([])
+    assert_equal '{"a"=>{"b"=>[1, {"c"=>nil}], "d"=>2.5}, "e"=>[]}',
+                 stringify.call({"a" => {"b" => [1, {"c" => nil}], "d" => 2.5}, "e" => []})
+    assert_equal '[{"x"=>1}, "y"]', stringify.call([{"x" => 1}, "y"])
+    assert_equal '{:sym=>1, :"foo bar"=>"x", 1=>2, nil=>true}',
+                 stringify.call({:sym => 1, :"foo bar" => "x", 1 => 2, nil => true})
+    assert_equal '{"q\\"d"=>"new\\nline"}', stringify.call({"q\"d" => "new\nline"})
+  end
+
   test 'masker_for_value_in_subnet' do
     conf = OpenStruct.new(salt: 's')
     plugin = create_driver.instance
@@ -362,6 +387,7 @@ CONF
     expected = {
       'host' => '10.102.3.0',
       'array' => ["e3cbba8883fe746c6e35783c9404b4bc0c7ee9eb", "a4ac914c09d7c097fe1f4f96b897e625b6922069"],
+      # The same digest on every Ruby version, though Ruby 3.4 changed Hash#inspect.
       'hash' => '1a1903d78aed9403649d61cb21ba6b489249761b'
     }
     filtered = filter(conf, messages)
