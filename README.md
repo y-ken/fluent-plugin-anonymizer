@@ -1,4 +1,4 @@
-# fluent-plugin-anonymizer [![Build Status](https://travis-ci.org/y-ken/fluent-plugin-anonymizer.png?branch=master)](https://travis-ci.org/y-ken/fluent-plugin-anonymizer)
+# fluent-plugin-anonymizer [![CI](https://github.com/y-ken/fluent-plugin-anonymizer/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/y-ken/fluent-plugin-anonymizer/actions/workflows/ci.yml)
 
 ## Overview
 
