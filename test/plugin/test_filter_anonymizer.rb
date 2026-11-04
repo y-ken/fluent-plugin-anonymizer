@@ -281,6 +281,62 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     OpenSSL::Digest.new("sha256").update(salt).update(str).hexdigest
   end
 
+  class HashWithInspect < Hash
+    def inspect = "HASH"
+  end
+  class ArrayWithInspect < Array
+    def inspect = "ARRAY"
+  end
+  class PlainSubHash < Hash; end
+  class InspectNil
+    def inspect = nil
+  end
+  class InspectInteger
+    def inspect = 65
+  end
+
+  # Like to_s on Ruby 3.3, which calls the inspect of each value inside, and
+  # to_s for the value itself.
+  CUSTOM_INSPECT = {
+    "nested subclass with its own inspect" => [
+      -> { {"h" => HashWithInspect["k", "v"], "a" => [ArrayWithInspect[1]]} },
+      '{"h"=>HASH, "a"=>[ARRAY]}',
+    ],
+    "subclass with its own inspect, but not to_s" => [
+      -> { HashWithInspect["k", "v"] },
+      '{"k"=>"v"}',
+    ],
+    "subclass without its own inspect" => [
+      -> { [PlainSubHash["k", [PlainSubHash["x", 1]]]] },
+      '[{"k"=>[{"x"=>1}]}]',
+    ],
+    "inspect that returns nil" => [
+      -> { [InspectNil.new] },
+      '[]',
+    ],
+    "inspect that returns an Integer" => [
+      -> { {"k" => InspectInteger.new} },
+      '{"k"=>65}',
+    ],
+  }
+
+  data(CUSTOM_INSPECT)
+  test 'stringify calls inspect that a class defines, as to_s does' do |(build, expected)|
+    assert_equal expected, Fluent::Plugin::AnonymizerFilter.stringify(build.call)
+  end
+
+  data(CUSTOM_INSPECT)
+  test 'keys masks a value with inspect that a class defines with sha256' do |(build, expected)|
+    conf = %[
+      <mask sha256>
+        keys secret
+        salt s
+      </mask>
+    ]
+    filtered = filter(conf, [{"secret" => build.call}])
+    assert_equal [{"secret" => sha256("s", expected)}], filtered
+  end
+
   data(NESTED_VALUES)
   test 'stringify writes deep, cyclic and shared values without recursion' do |(build, expected, _)|
     assert_equal expected, Fluent::Plugin::AnonymizerFilter.stringify(build.call)

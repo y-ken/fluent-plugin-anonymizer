@@ -41,10 +41,20 @@ module Fluent::Plugin
     def self.stringify(v)
       case v
       when String then v
-      when Hash, Array then inspect_before_ruby34(v)
+      when Hash, Array
+        builtin_inspect?(v, :to_s) ? inspect_before_ruby34(v) : v.to_s
       else v.to_s
       end
     end
+
+    # Whether v, a Hash or an Array, uses the built-in method to write itself,
+    # rather than one that a subclass or a module defines.
+    def self.builtin_inspect?(v, name)
+      return true if v.class.equal?(Hash) || v.class.equal?(Array)
+      owner = v.method(name).owner
+      owner.equal?(Hash) || owner.equal?(Array)
+    end
+    private_class_method :builtin_inspect?
 
     # Uses a stack instead of recursion, so that a deeply nested value does
     # not raise SystemStackError. Like inspect, it writes {...} or [...] for a
@@ -85,11 +95,17 @@ module Fluent::Plugin
               x = values ? items[i >> 1] : items[i]
             end
             i += 1
-            if x.is_a?(Hash) || x.is_a?(Array)
+            if (x.is_a?(Hash) || x.is_a?(Array)) && builtin_inspect?(x, :inspect)
               v = x
               break
             end
-            buf << x.inspect
+            s = x.inspect
+            # Like inspect, convert a result that is not a String.
+            unless s.is_a?(String)
+              t = s.to_s
+              s = t.is_a?(String) ? t : Kernel.instance_method(:to_s).bind_call(s)
+            end
+            buf << s
           end
           if v
             stack[-1] = i
