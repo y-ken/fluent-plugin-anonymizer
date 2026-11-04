@@ -38,36 +38,96 @@ module Fluent::Plugin
     # Returns the string that a value is masked as. A Hash or an Array is
     # written as Hash#inspect and Array#inspect wrote it before Ruby 3.4,
     # which changed {"a"=>1} to {"a" => 1}, so that its digest does not change
-    # with the Ruby version.
+    # with the Ruby version. As in to_s, a value that has its own to_s, or its
+    # own inspect inside a Hash or an Array, is written with that method.
     def self.stringify(v)
       case v
       when String then v
-      when Hash, Array then append_inspect(+"", v)
+      when Hash, Array
+        builtin_inspect?(v, :to_s) ? inspect_before_ruby34(v) : v.to_s
       else v.to_s
       end
     end
 
-    def self.append_inspect(buf, v)
-      case v
-      when Hash
-        buf << "{"
-        v.each_with_index do |(key, value), i|
-          buf << ", " if i > 0
-          append_inspect(buf, key) << "=>"
-          append_inspect(buf, value)
+    KERNEL_METHOD = Kernel.instance_method(:method)
+    KERNEL_TO_S = Kernel.instance_method(:to_s)
+    private_constant :KERNEL_METHOD, :KERNEL_TO_S
+
+    # Whether v, a Hash or an Array, uses the built-in method to write itself,
+    # rather than one that its class, a module or v itself defines. It uses
+    # Kernel#method, because a subclass may define a method named method.
+    def self.builtin_inspect?(v, name)
+      owner = KERNEL_METHOD.bind_call(v, name).owner
+      owner.equal?(Hash) || owner.equal?(Array)
+    end
+    private_class_method :builtin_inspect?
+
+    # Uses a stack instead of recursion, so that a deeply nested value does
+    # not raise SystemStackError. Like inspect, it writes {...} or [...] for a
+    # container that is already open on the current path (a cycle), and
+    # writes a container that is shared but is not a cycle in full each time.
+    def self.inspect_before_ruby34(value)
+      buf = +""
+      open = {}.compare_by_identity # the containers on the current path
+      # 4 slots for each open container: the container, its keys or elements,
+      # its values (nil for an Array), and the index of the next item. A Hash
+      # has 2 items for each pair: the key and the value.
+      stack = []
+      v = value # a Hash or an Array to write next
+      while true
+        hash = Hash === v
+        if open.key?(v)
+          buf << (hash ? "{...}" : "[...]")
+        elsif v.empty?
+          buf << (hash ? "{}" : "[]")
+        else
+          buf << (hash ? "{" : "[")
+          open[v] = true
+          stack.push(v, hash ? v.keys : v, hash ? v.values : nil, 0)
         end
-        buf << "}"
-      when Array
-        buf << "["
-        v.each_with_index do |e, i|
-          buf << ", " if i > 0
-          append_inspect(buf, e)
+
+        # Write the items of the innermost open container up to the next Hash
+        # or Array, and close the containers that are done.
+        v = nil
+        until v || stack.empty?
+          items, values, i = stack[-3], stack[-2], stack[-1]
+          size = values ? items.size * 2 : items.size
+          while i < size
+            if values && i.odd?
+              buf << "=>"
+              x = values[i >> 1]
+            else
+              buf << ", " if i > 0
+              x = values ? items[i >> 1] : items[i]
+            end
+            i += 1
+            # Module#=== works for a BasicObject, which has no is_a?.
+            if (Hash === x || Array === x) && builtin_inspect?(x, :inspect)
+              v = x
+              break
+            end
+            s = x.inspect
+            # Like inspect, convert a result that is not a String.
+            unless String === s
+              t = s.to_s
+              s = String === t ? t : KERNEL_TO_S.bind_call(s)
+            end
+            buf << s
+          end
+          if v
+            stack[-1] = i
+          else
+            buf << (values ? "}" : "]")
+            stack.pop
+            stack.pop
+            stack.pop
+            open.delete(stack.pop)
+          end
         end
-        buf << "]"
-      else
-        buf << v.inspect
+        return buf unless v
       end
     end
+    private_class_method :inspect_before_ruby34
 
     MASK_METHODS = {
       md5:    ->(opts){ ->(v,salt){ OpenSSL::Digest.new("md5").update(salt).update(stringify(v)).hexdigest } },

@@ -160,6 +160,14 @@ Round number for following one or more keys. It makes easy to aggregate calculat
 
 ## Notes
 
+* Hash and Array values on Ruby 3.4 and later
+
+The hash methods and `value_pattern` read a Hash or an Array value as a string in the format of Ruby 3.3 and earlier, such as `{"k"=>"v"}`, on every Ruby version. Ruby 3.4 changed `Hash#inspect` to `{"k" => "v"}`.
+
+On Ruby 3.4 and later, this changes the digest of a non-empty Hash value, and of an Array value that contains a non-empty Hash, from the one made by the previous version of this plugin. These values go back to the digest made on Ruby 3.3 and earlier.
+
+A `value_pattern` written for the Ruby 3.4 format, such as `"k" => "v"`, no longer matches these values, so it no longer masks them. Change such a pattern to the format of Ruby 3.3 and earlier, such as `"k"=>"v"`.
+
 * hashing nested value behavior is compatible with [LogStash::Filters::Anonymize](https://github.com/logstash-plugins/logstash-filter-anonymize/blob/master/lib/logstash/filters/anonymize.rb) does. For further details, please check it out the test code at [test_emit_nest_value](https://github.com/y-ken/fluent-plugin-anonymizer/blob/master/test/plugin/test_filter_anonymizer.rb#L231).
 
 * How to reproduce anonymized string with another way?
