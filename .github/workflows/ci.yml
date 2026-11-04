@@ -27,6 +27,43 @@ jobs:
         run: bundle exec ruby ci/check_fluentd_version.rb
       - run: bundle exec rake test
 
+  # Checks that the configurations in test/compat/configs work as they do with
+  # v1.0.0 on Ruby 2.7. ci/check_config_compat.rb makes its own bundles, with
+  # the Fluentd of FLUENTD_VERSION or the latest one for each Ruby, so this job
+  # does not run ci/check_fluentd_version.rb.
+  # Ruby 2.7 runs v1.0.0 and checks that the baseline is still its output.
+  # v1.0.0 does not run the parameters of v1.0.0 in the filter on Ruby 3.x
+  # (OpenStruct is not loaded), so the other Rubies are compared with the
+  # baseline, the output of v1.0.0 on Ruby 2.7, without running v1.0.0.
+  config-compat:
+    name: Config compat with v1.0.0 (Ruby ${{ matrix.ruby }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Ruby 2.7 must run every configuration with v1.0.0.
+          - ruby: '2.7'
+            fluentd: '~> 1.16.0'
+            options: --fail-on-skip --baseline test/compat/released-1.0.0-ruby2.7.json 1.0.0
+          - ruby: '3.2'
+            fluentd: '~> 1.16.0'
+            options: --baseline test/compat/released-1.0.0-ruby2.7.json
+          - ruby: '3.3'
+            options: --baseline test/compat/released-1.0.0-ruby2.7.json
+          - ruby: '3.4'
+            options: --baseline test/compat/released-1.0.0-ruby2.7.json
+          - ruby: '4.0'
+            options: --baseline test/compat/released-1.0.0-ruby2.7.json
+    env:
+      FLUENTD_VERSION: ${{ matrix.fluentd }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ruby/setup-ruby@de492cf36cbab201753d720ce4f4e336cd688c94 # v1.336.0
+        with:
+          ruby-version: ${{ matrix.ruby }}
+      - run: ruby ci/check_config_compat.rb ${{ matrix.options }}
+
   # Container path: the official fluent/fluentd Docker image (gem-based).
   install-smoke-docker:
     name: Install smoke (Docker fluent/fluentd ${{ matrix.fluentd_tag }})
