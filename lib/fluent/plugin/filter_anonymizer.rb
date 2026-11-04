@@ -41,32 +41,70 @@ module Fluent::Plugin
     def self.stringify(v)
       case v
       when String then v
-      when Hash, Array then append_inspect(+"", v)
+      when Hash, Array then inspect_before_ruby34(v)
       else v.to_s
       end
     end
 
-    def self.append_inspect(buf, v)
-      case v
-      when Hash
-        buf << "{"
-        v.each_with_index do |(key, value), i|
-          buf << ", " if i > 0
-          append_inspect(buf, key) << "=>"
-          append_inspect(buf, value)
+    # Uses a stack instead of recursion, so that a deeply nested value does
+    # not raise SystemStackError. Like inspect, it writes {...} or [...] for a
+    # container that is already open on the current path (a cycle), and
+    # writes a container that is shared but is not a cycle in full each time.
+    def self.inspect_before_ruby34(value)
+      buf = +""
+      open = {}.compare_by_identity # the containers on the current path
+      # 4 slots for each open container: the container, its keys or elements,
+      # its values (nil for an Array), and the index of the next item. A Hash
+      # has 2 items for each pair: the key and the value.
+      stack = []
+      v = value # a Hash or an Array to write next
+      while true
+        hash = v.is_a?(Hash)
+        if open.key?(v)
+          buf << (hash ? "{...}" : "[...]")
+        elsif v.empty?
+          buf << (hash ? "{}" : "[]")
+        else
+          buf << (hash ? "{" : "[")
+          open[v] = true
+          stack.push(v, hash ? v.keys : v, hash ? v.values : nil, 0)
         end
-        buf << "}"
-      when Array
-        buf << "["
-        v.each_with_index do |e, i|
-          buf << ", " if i > 0
-          append_inspect(buf, e)
+
+        # Write the items of the innermost open container up to the next Hash
+        # or Array, and close the containers that are done.
+        v = nil
+        until v || stack.empty?
+          items, values, i = stack[-3], stack[-2], stack[-1]
+          size = values ? items.size * 2 : items.size
+          while i < size
+            if values && i.odd?
+              buf << "=>"
+              x = values[i >> 1]
+            else
+              buf << ", " if i > 0
+              x = values ? items[i >> 1] : items[i]
+            end
+            i += 1
+            if x.is_a?(Hash) || x.is_a?(Array)
+              v = x
+              break
+            end
+            buf << x.inspect
+          end
+          if v
+            stack[-1] = i
+          else
+            buf << (values ? "}" : "]")
+            stack.pop
+            stack.pop
+            stack.pop
+            open.delete(stack.pop)
+          end
         end
-        buf << "]"
-      else
-        buf << v.inspect
+        return buf unless v
       end
     end
+    private_class_method :inspect_before_ruby34
 
     MASK_METHODS = {
       md5:    ->(opts){ ->(v,salt){ OpenSSL::Digest.new("md5").update(salt).update(stringify(v)).hexdigest } },

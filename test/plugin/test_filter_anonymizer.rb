@@ -230,6 +230,86 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     assert_equal '{"q\\"d"=>"new\\nline"}', stringify.call({"q\"d" => "new\nline"})
   end
 
+  test 'stringify is public and its helper is private' do
+    assert_true Fluent::Plugin::AnonymizerFilter.respond_to?(:stringify)
+    assert_false Fluent::Plugin::AnonymizerFilter.respond_to?(:inspect_before_ruby34)
+  end
+
+  # The expected strings are in the format of to_s on Ruby 3.3. Each pattern
+  # for value_pattern does not start with a quote, which the config parser
+  # would read as a quoted string.
+  DEEP = 3000
+  NESTED_VALUES = {
+    "Hash nested 3,000 levels deep" => [
+      -> { v = "alice"; DEEP.times { v = {"k" => v} }; v },
+      '{"k"=>' * DEEP + '"alice"' + '}' * DEEP,
+      'alice',
+    ],
+    "Array nested 3,000 levels deep" => [
+      -> { v = "alice"; DEEP.times { v = [v] }; v },
+      '[' * DEEP + '"alice"' + ']' * DEEP,
+      'alice',
+    ],
+    "direct cycle of a Hash" => [
+      -> { h = {"a" => 1}; h["self"] = h; h },
+      '{"a"=>1, "self"=>{...}}',
+      'self"=>\{\.\.\.\}\}$',
+    ],
+    "direct cycle of an Array" => [
+      -> { a = [1]; a << a; a },
+      '[1, [...]]',
+      '^\[1, \[\.\.\.\]\]$',
+    ],
+    "indirect cycle" => [
+      -> { h1 = {}; h2 = {}; h1["x"] = h2; h2["x"] = h1; h1 },
+      '{"x"=>{"x"=>{...}}}',
+      '^\{"x"=>\{"x"=>\{\.\.\.\}\}\}$',
+    ],
+    "indirect cycle through an Array" => [
+      -> { a = []; a << {"y" => a} << 2; a },
+      '[{"y"=>[...]}, 2]',
+      'y"=>\[\.\.\.\]\}, 2\]$',
+    ],
+    "shared container that is not a cycle" => [
+      -> { s = {"k" => "v"}; l = [1, s]; {"a" => s, "b" => s, "c" => [l, l]} },
+      '{"a"=>{"k"=>"v"}, "b"=>{"k"=>"v"}, "c"=>[[1, {"k"=>"v"}], [1, {"k"=>"v"}]]}',
+      'b"=>\{"k"=>"v"\}, "c"=>\[\[1, \{"k"=>"v"\}\], \[1, \{',
+    ],
+  }
+
+  def sha256(salt, str)
+    OpenSSL::Digest.new("sha256").update(salt).update(str).hexdigest
+  end
+
+  data(NESTED_VALUES)
+  test 'stringify writes deep, cyclic and shared values without recursion' do |(build, expected, _)|
+    assert_equal expected, Fluent::Plugin::AnonymizerFilter.stringify(build.call)
+  end
+
+  data(NESTED_VALUES)
+  test 'keys masks deep, cyclic and shared values with sha256' do |(build, expected, _)|
+    conf = %[
+      <mask sha256>
+        keys secret
+        salt s
+      </mask>
+    ]
+    filtered = filter(conf, [{"n" => 1, "secret" => build.call}])
+    assert_equal [{"n" => 1, "secret" => sha256("s", expected)}], filtered
+  end
+
+  data(NESTED_VALUES)
+  test 'value_pattern masks deep, cyclic and shared values with sha256' do |(build, expected, pattern)|
+    conf = %[
+      <mask sha256>
+        value_pattern #{pattern}
+        salt s
+      </mask>
+    ]
+    filtered = filter(conf, [{"n" => 1, "secret" => build.call}])
+    assert_equal [{"n" => 1, "secret" => sha256("s", expected)}], filtered
+  end
+
   test 'masker_for_value_in_subnet' do
     conf = OpenStruct.new(salt: 's')
     plugin = create_driver.instance
