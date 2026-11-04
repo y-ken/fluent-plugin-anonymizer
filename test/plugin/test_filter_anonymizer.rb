@@ -307,9 +307,10 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     assert_equal "123456:s", r["n"]
   end
 
-  test 'stringify is public and its helper is private' do
+  test 'stringify is public and its helpers are private' do
     assert_true Fluent::Plugin::AnonymizerFilter.respond_to?(:stringify)
     assert_false Fluent::Plugin::AnonymizerFilter.respond_to?(:inspect_before_ruby34)
+    assert_false Fluent::Plugin::AnonymizerFilter.respond_to?(:plain_container?)
   end
 
   # The expected strings are in the format of to_s on Ruby 3.3. Each pattern
@@ -359,95 +360,115 @@ class AnonymizerFilterTest < Test::Unit::TestCase
   end
 
   class HashWithInspect < Hash
-    def inspect = "HASH"
+    def inspect; "HASH"; end
   end
   class ArrayWithInspect < Array
-    def inspect = "ARRAY"
+    def inspect; "ARRAY"; end
   end
   class PlainSubHash < Hash; end
   class InspectNil
-    def inspect = nil
+    def inspect; nil; end
   end
   class InspectInteger
-    def inspect = 65
+    def inspect; 65; end
   end
   class HashWithMethodKey < Hash
-    def method = self["method"]
+    def method; self["method"]; end
   end
   class HashFakingClass < Hash
-    def inspect = "FAKE"
-    def class = Hash
+    def inspect; "FAKE"; end
+    def class; Hash; end
   end
   class BasicWithInspect < BasicObject
-    def inspect = "BASIC"
+    def inspect; "BASIC"; end
   end
   module InspectModule
-    def inspect = "MODULE"
+    def inspect; "MODULE"; end
   end
   module ToSModule
-    def to_s = "MODULE_TO_S"
+    def to_s; "MODULE_TO_S"; end
   end
 
-  # Like to_s on Ruby 3.3, which calls the inspect of each value inside, and
-  # to_s for the value itself.
-  CUSTOM_INSPECT = {
-    "nested subclass with its own inspect" => [
-      -> { {"h" => HashWithInspect["k", "v"], "a" => [ArrayWithInspect[1]]} },
-      '{"h"=>HASH, "a"=>[ARRAY]}',
-    ],
-    "subclass with its own inspect, but not to_s" => [
-      -> { HashWithInspect["k", "v"] },
-      '{"k"=>"v"}',
-    ],
-    "subclass without its own inspect" => [
-      -> { [PlainSubHash["k", [PlainSubHash["x", 1]]]] },
-      '[{"k"=>[{"x"=>1}]}]',
-    ],
-    "inspect that returns nil" => [
-      -> { [InspectNil.new] },
-      '[]',
-    ],
-    "inspect that returns an Integer" => [
-      -> { {"k" => InspectInteger.new} },
-      '{"k"=>65}',
-    ],
-    "subclass with a method named method" => [
-      -> { [HashWithMethodKey["method", "GET"], {"a" => HashWithMethodKey["method", "PUT"]}] },
-      '[{"method"=>"GET"}, {"a"=>{"method"=>"PUT"}}]',
-    ],
-    "subclass that returns Hash from class" => [
-      -> { [HashFakingClass["k", 1]] },
-      '[FAKE]',
-    ],
-    "BasicObject" => [
-      -> { [BasicWithInspect.new] },
-      '[BASIC]',
-    ],
-    "singleton inspect" => [
-      -> { h = {"k" => "v"}; def h.inspect = "SINGLE"; {"h" => h} },
-      '{"h"=>SINGLE}',
-    ],
-    "singleton to_s" => [
-      -> { h = {"k" => "v"}; def h.to_s = "SINGLE_TO_S"; h },
-      'SINGLE_TO_S',
-    ],
-    "inspect from extend" => [
-      -> { [{"k" => "v"}.extend(InspectModule)] },
-      '[MODULE]',
-    ],
-    "to_s from extend" => [
-      -> { {"k" => "v"}.extend(ToSModule) },
-      'MODULE_TO_S',
-    ],
+  # The values in the review of #37. Each is not plain, so it uses to_s of the
+  # running Ruby, as master does.
+  class StringWithToS < String
+    def to_s; "alice"; end
+  end
+  class ArrayWithIndex < Array
+    def [](i); "bob"; end
+  end
+  class HashWithKeys < Hash
+    def keys; ["other"]; end
+    def values; ["bob"]; end
+  end
+  class PrivateInspect
+    def inspect; "alice"; end
+    private :inspect
+  end
+  class PrivateToS
+    def to_s; "alice"; end
+    private :to_s
+  end
+  class InspectPrivateToS
+    def inspect; PrivateToS.new; end
+  end
+  class InspectUTF16
+    def inspect; "alice".encode("UTF-16LE"); end
+  end
+  StructRef = Struct.new(:ref)
+  class InspectAppends
+    def initialize(array); @array = array; end
+    def inspect; @array << "alice"; "first"; end
+  end
+  class InspectNonASCII
+    def inspect; "é"; end
+  end
+
+  # Each value is built anew for each call, because inspect may change it.
+  NOT_PLAIN_VALUES = {
+    "nested subclass with its own inspect" => -> { {"h" => HashWithInspect["k", "v"], "a" => [ArrayWithInspect[1]]} },
+    "subclass with its own inspect, but not to_s" => -> { HashWithInspect["k", "v"] },
+    "subclass without its own inspect" => -> { [PlainSubHash["k", [PlainSubHash["x", 1]]]] },
+    "inspect that returns nil" => -> { [InspectNil.new] },
+    "inspect that returns an Integer" => -> { {"k" => InspectInteger.new} },
+    "subclass with a method named method" => -> { [HashWithMethodKey["method", "GET"], {"a" => HashWithMethodKey["method", "PUT"]}] },
+    "subclass that returns Hash from class" => -> { [HashFakingClass["k", 1]] },
+    "BasicObject" => -> { [BasicWithInspect.new] },
+    "singleton inspect" => -> { h = {"k" => "v"}; def h.inspect; "SINGLE"; end; {"h" => h} },
+    "singleton to_s" => -> { h = {"k" => "v"}; def h.to_s; "SINGLE_TO_S"; end; h },
+    "inspect from extend" => -> { [{"k" => "v"}.extend(InspectModule)] },
+    "to_s from extend" => -> { {"k" => "v"}.extend(ToSModule) },
+    "String subclass with its own to_s" => -> { StringWithToS.new("raw") },
+    "Array subclass with its own []" => -> { ArrayWithIndex["alice"] },
+    "Hash subclass with its own keys and values" => -> { HashWithKeys["secret", "alice"] },
+    "private inspect" => -> { [PrivateInspect.new] },
+    "inspect that returns a value with a private to_s" => -> { [InspectPrivateToS.new] },
+    "inspect that returns UTF-16LE" => -> { [InspectUTF16.new] },
+    "Struct with a cycle" => -> { a = []; a << StructRef.new(a); a },
+    "inspect that adds to the Array" => -> { a = []; a << InspectAppends.new(a); a },
+    "String subclass inside" => -> { {"k" => StringWithToS.new("raw")} },
+    "Struct holding a Hash" => -> { [StructRef.new({"k" => "v"})] },
+    "inspect undefined, with method_missing" => -> {
+      h = {"k" => "v"}
+      h.singleton_class.send(:undef_method, :inspect)
+      def h.method_missing(*); "MISSING"; end
+      [h]
+    },
+    "to_s undefined, with method_missing" => -> {
+      h = {"k" => "v"}
+      h.singleton_class.send(:undef_method, :to_s)
+      def h.method_missing(*); "MISSING"; end
+      h
+    },
   }
 
-  data(CUSTOM_INSPECT)
-  test 'stringify calls inspect that a class defines, as to_s does' do |(build, expected)|
-    assert_equal expected, Fluent::Plugin::AnonymizerFilter.stringify(build.call)
+  data(NOT_PLAIN_VALUES)
+  test 'stringify uses to_s for a value that is not plain' do |build|
+    assert_equal build.call.to_s, Fluent::Plugin::AnonymizerFilter.stringify(build.call)
   end
 
-  data(CUSTOM_INSPECT)
-  test 'keys masks a value with inspect that a class defines with sha256' do |(build, expected)|
+  data(NOT_PLAIN_VALUES)
+  test 'keys masks a value that is not plain with sha256 of to_s' do |build|
     conf = %[
       <mask sha256>
         keys secret
@@ -455,7 +476,30 @@ class AnonymizerFilterTest < Test::Unit::TestCase
       </mask>
     ]
     filtered = filter(conf, [{"secret" => build.call}])
-    assert_equal [{"secret" => sha256("s", expected)}], filtered
+    assert_equal [{"secret" => sha256("s", build.call.to_s)}], filtered
+  end
+
+  # Ruby escapes a result of inspect that is not ASCII-only and not in the
+  # default encoding.
+  test 'stringify follows the escape of a result of inspect in another encoding' do
+    verbose, $VERBOSE = $VERBOSE, nil
+    external, internal = Encoding.default_external, Encoding.default_internal
+    Encoding.default_external = Encoding::US_ASCII
+    Encoding.default_internal = nil
+    # Ruby writes "\u00E9" for the inspect of this object.
+    assert_equal '[\u00E9]', [InspectNonASCII.new].to_s
+    assert_equal '[\u00E9]', Fluent::Plugin::AnonymizerFilter.stringify([InspectNonASCII.new])
+    # String#inspect escapes it by itself, so the old format is kept.
+    assert_equal '{"k"=>"\u00E9"}', Fluent::Plugin::AnonymizerFilter.stringify({"k" => "\u00e9"})
+  ensure
+    Encoding.default_external = external
+    Encoding.default_internal = internal
+    $VERBOSE = verbose
+  end
+
+  test 'stringify writes a value with characters in the default encoding in the old format' do
+    omit_unless(Encoding.default_external == Encoding::UTF_8 && Encoding.default_internal.nil?)
+    assert_equal "{\"k\"=>\"é\"}", Fluent::Plugin::AnonymizerFilter.stringify({"k" => "é"})
   end
 
   data(NESTED_VALUES)
