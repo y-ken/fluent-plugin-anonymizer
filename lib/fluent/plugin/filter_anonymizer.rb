@@ -178,27 +178,26 @@ module Fluent::Plugin
         } },
     }
 
-    OBSOLETED_MASK_METHOD_PARAMS_MESSAGE = <<EOF
-Use
-<mask MASK_METHOD>
-  # ...
-</mask>
-instead.
-EOF
+    # The options of a mask for the parameters of v1.0.0, as a <mask> section
+    # gives them. It is a Struct, because v1.0.0 used OpenStruct, which Ruby
+    # 3.3 and later do not load.
+    MaskOptions = Struct.new(:salt, :mask_array_elements, :ipv4_mask_bits, :ipv6_mask_bits)
+
+    NESTED_KEY_NOTE = "Write a nested key such as a.b as $.a.b in keys."
 
     config_param :salt, :string, default: nil
     config_param :salts, :array, default: nil
-    config_section :mask, param_name: :mask_config_list, required: true, multi: true do
+    config_section :mask, param_name: :mask_config_list, required: false, multi: true do
       config_argument :method, :enum, list: MASK_METHODS.keys
       config_param :salt, :string, default: nil
 
       config_param :key,             :string, default: nil,
-                   obsoleted: "Use keys parameter instead."
+                   deprecated: "Use keys in <mask> instead."
       config_param :keys,            :array,  default: []
       config_param :key_chain,       :string, default: nil, # for.nested.key
-                   obsoleted: "Use keys parameter instead, with $. for a nested key, such as $.user.name."
+                   deprecated: "Use keys in <mask> instead. #{NESTED_KEY_NOTE}"
       config_param :key_chains,      :array,  default: [],  # ["for.nested.key","can.be.specified","twice.or.more"]
-                   obsoleted: "Use keys parameter instead, with $. for a nested key, such as $.user.name."
+                   deprecated: "Use keys in <mask> instead. #{NESTED_KEY_NOTE}"
       config_param :key_pattern,     :string, default: nil
       config_param :value_pattern,   :string, default: nil
       config_param :value_in_subnet, :string, default: nil # 192.168.0.0/24
@@ -208,25 +207,21 @@ EOF
       config_param :ipv6_mask_bits, :integer, default: nil
     end
 
-    # obsolete configuration parameters
-    config_param :md5_keys,    :string, default: nil,
-                 obsoleted: OBSOLETED_MASK_METHOD_PARAMS_MESSAGE
-    config_param :sha1_keys,   :string, default: nil,
-                 obsoleted: OBSOLETED_MASK_METHOD_PARAMS_MESSAGE
-    config_param :sha256_keys, :string, default: nil,
-                 obsoleted: OBSOLETED_MASK_METHOD_PARAMS_MESSAGE
-    config_param :sha384_keys, :string, default: nil,
-                 obsoleted: OBSOLETED_MASK_METHOD_PARAMS_MESSAGE
-    config_param :sha512_keys, :string, default: nil,
-                 obsoleted: OBSOLETED_MASK_METHOD_PARAMS_MESSAGE
+    # The parameters of v1.0.0. They work as in v1.0.0, after all <mask>
+    # sections.
+    LEGACY_HASH_METHODS = [:md5, :sha1, :sha256, :sha384, :sha512]
+    LEGACY_HASH_METHODS.each do |m|
+      config_param :"#{m}_keys", :string, default: nil,
+                   deprecated: "Use <mask #{m}> with keys, salt and mask_array_elements true instead. #{NESTED_KEY_NOTE}"
+    end
     config_param :hash_salt,   :string, default: nil,
-                 obsoleted: "Use salt parameter in mask directive instead."
+                 deprecated: "Use salt in <mask> instead."
     config_param :ipaddr_mask_keys, :string, default: nil,
-                 obsoleted: "Use keys parameter in mask directive instead."
+                 deprecated: "Use <mask network> with keys, ipv4_mask_bits, ipv6_mask_bits and mask_array_elements true instead. #{NESTED_KEY_NOTE}"
     config_param :ipv4_mask_subnet, :integer, default: 24,
-                 obsoleted: "Use ipv4_mask_bits in mask directive instead."
+                 deprecated: "Use ipv4_mask_bits in <mask network> instead."
     config_param :ipv6_mask_subnet, :integer, default: 104,
-                 obsoleted: "Use ipv6_mask_bits in mask directive instead."
+                 deprecated: "Use ipv6_mask_bits in <mask network> instead."
 
     def initialize
       super
@@ -250,6 +245,8 @@ EOF
         end
 
         conv = MASK_METHODS[c.method].call(c)
+        # key of v1.0.0 is a top-level key, even if it starts with $.
+        @masks << masker_for_key(conv, c.key, c) if c.key
         # null in keys is skipped, as in v1.0.0.
         keys = c.keys.compact
         paths = keys.each_with_index.map { |key, i| key_path(key, keys[(i + 1)..-1], c) }
@@ -257,9 +254,24 @@ EOF
         paths.each do |path|
           @masks << masker_for_key_chain(conv, path, c)
         end
+        [c.key_chain, *c.key_chains].compact.each do |key_chain|
+          @masks << masker_for_key_chain(conv, key_chain.split('.'), c)
+        end
         @masks << masker_for_key_pattern(conv, c.key_pattern, c) if c.key_pattern
         @masks << masker_for_value_pattern(conv, c.value_pattern, c) if c.value_pattern
         @masks << masker_for_value_in_subnet(conv, c.value_in_subnet, c) if c.value_in_subnet
+      end
+
+      # The parameters of v1.0.0, with the salt and the order of v1.0.0.
+      LEGACY_HASH_METHODS.each do |m|
+        keys = public_send(:"#{m}_keys")
+        next unless keys
+        opts = MaskOptions.new(@hash_salt || '', true, nil, nil)
+        add_legacy_masks(MASK_METHODS[m].call(opts), keys, opts)
+      end
+      if @ipaddr_mask_keys
+        opts = MaskOptions.new(@hash_salt || '', true, @ipv4_mask_subnet, @ipv6_mask_subnet)
+        add_legacy_masks(MASK_METHODS[:network].call(opts), @ipaddr_mask_keys, opts)
       end
 
       if @masks.size < 1
@@ -345,6 +357,17 @@ EOF
         next if same.size < 2
         log.warn "#{same.map { |k, _| k.inspect }.join(' and ')} in keys of <mask #{opts.method}> are the same key, " \
                  "so its value is masked #{same.size} times. Write the key once."
+      end
+    end
+
+    # A key of v1.0.0 with a dot is a nested key.
+    def add_legacy_masks(conv, keys, opts)
+      keys.split(',').map(&:strip).each do |key|
+        if key.include?('.')
+          @masks << masker_for_key_chain(conv, key.split('.'), opts)
+        else
+          @masks << masker_for_key(conv, key, opts)
+        end
       end
     end
 

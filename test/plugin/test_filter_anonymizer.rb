@@ -864,8 +864,10 @@ CONF
 
     data("key_chain" => "key_chain a.b", "key_chains" => "key_chains a.b")
     test "key_chain and key_chains point to keys with $." do |param|
-      e = assert_raise(Fluent::ObsoletedParameterError) { create_driver("<mask sha1>\n  #{param}\n  salt s\n</mask>") }
-      assert_include e.message, "Use keys parameter instead, with $. for a nested key, such as $.user.name."
+      d = create_driver("<mask sha1>\n  #{param}\n  salt s\n</mask>")
+      warnings = d.logs.grep(/'#{param.split.first}' parameter is deprecated/)
+      assert_equal 1, warnings.size, d.logs.join
+      assert_include warnings.first, "Write a nested key such as a.b as $.a.b in keys."
     end
 
     test "keys skips null, as v1.0.0" do
