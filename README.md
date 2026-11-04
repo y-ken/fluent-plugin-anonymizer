@@ -8,7 +8,7 @@ Fluentd filter plugin to anonymize records with [OpenSSL::Digest](https://docs.r
 
 | fluent-plugin-anonymizer | fluentd    | ruby   |
 |--------------------|------------|--------|
-|  master (not released yet) | v0.14.x | >= 2.7 |
+|  1.1.0            | v0.14.x | >= 2.7 |
 |  1.0.0            | v0.14.x | >= 2.1 |
 |  0.5.1            | v0.12.x | >= 1.9 |
 
@@ -25,7 +25,7 @@ $ gem install fluent-plugin-anonymizer
 $ sudo td-agent-gem install fluent-plugin-anonymizer -v 0.5.1
 
 # for td-agent3 (with fluentd v1.0)
-$ sudo td-agent-gem install fluent-plugin-anonymizer -v 1.0.0
+$ sudo td-agent-gem install fluent-plugin-anonymizer -v 1.1.0
 ```
 
 For more details, see [Plugin Management](https://docs.fluentd.org/v1.0/articles/plugin-management)
