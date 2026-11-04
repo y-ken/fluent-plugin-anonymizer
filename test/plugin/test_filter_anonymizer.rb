@@ -52,35 +52,6 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     filtered.map {|m| m.last }
   end
 
-  data("plain" => {"key" => "plain",
-                   "expected" => "plain"},
-       "nested" => {"key" => "nested.key",
-                    "expected" => "$.nested.key"},
-       "nested_nested" => {"key" => "nested.nested.key",
-                           "expected" => "$.nested.nested.key"},
-      )
-  def test_convert_compat_key(data)
-    d = create_driver
-    actual = d.instance.convert_compat_key(data["key"])
-    assert_equal(data["expected"], actual)
-  end
-
-  data("plain" => {"key" => "plain",
-                   "expected" => false},
-       "nested" => {"key" => "nested.key",
-                    "expected" => true},
-       "nested_nested" => {"key" => "nested.nested.key",
-                           "expected" => true},
-       "bracket" => {"key" => "$['nested']['nested']['key']",
-                     "expected" => true},
-      )
-  def test_mask_with_key_chain?(data)
-    d = create_driver
-    key = d.instance.convert_compat_key(data["key"])
-    actual = d.instance.mask_with_key_chain?(key)
-    assert_equal(data["expected"], actual)
-  end
-
   require 'ostruct'
   test 'method md5 works correctly' do
     conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:md5].call(OpenStruct.new)
@@ -164,7 +135,7 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     conf = OpenStruct.new(salt: 's')
     plugin = create_driver.instance
     conv = ->(v,salt){ "#{v.upcase}:#{salt}" } # it's dummy for test
-    masker = plugin.masker_for_key_chain(conv, '$.a.b.c', conf)
+    masker = plugin.masker_for_key_chain(conv, ['a', 'b', 'c'], conf)
     event = {
       'a' => {
         'b' => { 'c' => 'v', 'd' => 'v' }
@@ -537,11 +508,7 @@ CONF
     assert_equal(expected, filtered[0])
   end
 
-  data("old style" => {
-         "sha1" => "nested.data,nested.nested.data",
-         "network" => "hosts.host1",
-       },
-       "new style" => {
+  data("new style" => {
          "sha1" => "$.nested.data,$.nested.nested.data",
          "network" => "$.hosts.host1",
        },
@@ -638,5 +605,63 @@ CONF
     ]
     filtered = filter(conf, messages)
     assert_equal(expected, filtered)
+  end
+
+  # The configurations of v1.0.0. Each expected record is the output of
+  # fluent-plugin-anonymizer 1.0.0 on Ruby 2.7 for V1_INPUT. It holds only the
+  # top-level keys that v1.0.0 changed.
+  V1_INPUT = {
+    "host" => "10.102.3.80", "host6" => "2001:db8:0:8d3:0:8a2e:70:7344", "mapped" => "::ffff:129.144.52.38",
+    "not_ip" => "localhost", "ips" => ["10.1.2.3", "2001:db8::1"], "user_id" => "alice", "member_id" => "12345",
+    "mail" => "example@example.com", "num" => 42, "null" => nil, "false" => false, "empty" => "",
+    "list" => ["1000", "2000"], "hash" => {"k" => "v"}, "user.name" => "flat", "user id" => "spaced",
+    "nest" => {"id" => "42", "ip" => "192.168.1.10", "null" => nil, "deep" => {"id" => "7"}},
+  }
+  V1_CONFIGS = {
+    # keys is not deprecated, but its output had changed from v1.0.0.
+    "keys with a dot, null and false" => [
+      "<mask sha1>\n  keys user.name, null, false\n  salt s\n</mask>",
+      {"null"=>"a0f1490a20d0211c997b44bc357e1972deab8ae3", "false"=>"60c2454acc39438e4dd40f221d576191fa5312f3", "user.name"=>"e3a633c4aa4f56f1782b222125030d280351ec2e"},
+    ],
+  }
+
+  sub_test_case "configurations of v1.0.0" do
+    data(V1_CONFIGS)
+    test "output the same records as v1.0.0" do |(conf, changed)|
+      d = create_driver(conf)
+      d.run(default_tag: 'test') { d.feed(@time, Marshal.load(Marshal.dump(V1_INPUT))) }
+      assert_equal [V1_INPUT.merge(changed)], d.filtered_records
+      assert_equal [], d.logs.grep(/\[error\]/)
+    end
+  end
+
+  sub_test_case "keys" do
+    test "keys without $ is a top-level key even with a dot, as v1.0.0" do
+      d = create_driver("<mask sha1>\n  keys a.b\n  salt s\n</mask>")
+      d.run(default_tag: 'test') { d.feed(@time, {"a" => {"b" => "nested"}}) }
+      assert_equal [{"a" => {"b" => "nested"}}], d.filtered_records
+    end
+
+    data("dot" => "$.a", "bracket" => "$['a']")
+    test "keys with one key of record_accessor is a top-level key" do |key|
+      d = create_driver("<mask sha1>\n  keys #{key}\n  salt s\n</mask>")
+      d.run(default_tag: 'test') { d.feed(@time, {"a" => "alice", "b" => nil}) }
+      assert_equal [{"a" => OpenSSL::Digest.new("sha1").update("s").update("alice").hexdigest, "b" => nil}], d.filtered_records
+      assert_equal [], d.logs.grep(/\[error\]/)
+    end
+
+    test "keys with a value that is not a String starts, as v1.0.0" do
+      d = create_driver("<mask sha1>\n  keys [123, \"user_id\"]\n  salt s\n</mask>")
+      d.run(default_tag: 'test') { d.feed(@time, {"user_id" => "alice", "123" => "x"}) }
+      assert_equal [{"user_id" => OpenSSL::Digest.new("sha1").update("s").update("alice").hexdigest, "123" => "x"}], d.filtered_records
+    end
+
+    test "keys of record_accessor masks null in an existing key and an element of an Array" do
+      d = create_driver("<mask sha1>\n  keys $.a.n, $.a.missing, $.list[1], $.list[5], $.a.b.c\n  salt s\n</mask>")
+      d.run(default_tag: 'test') { d.feed(@time, {"a" => {"n" => nil, "b" => "x"}, "list" => ["x", "y"]}) }
+      sha1 = ->(v) { OpenSSL::Digest.new("sha1").update("s").update(v).hexdigest }
+      assert_equal [{"a" => {"n" => sha1.(""), "b" => "x"}, "list" => ["x", sha1.("y")]}], d.filtered_records
+      assert_equal [], d.logs.grep(/\[error\]/)
+    end
   end
 end
