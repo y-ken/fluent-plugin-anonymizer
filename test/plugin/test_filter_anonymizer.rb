@@ -52,35 +52,37 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     filtered.map {|m| m.last }
   end
 
-  require 'ostruct'
+  # The options of a mask, as a <mask> section gives them.
+  Opts = Struct.new(:salt, :mask_array_elements, :ipv4_mask_bits, :ipv6_mask_bits, keyword_init: true)
+
   test 'method md5 works correctly' do
-    conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:md5].call(OpenStruct.new)
+    conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:md5].call(Opts.new)
     digest = conv.call('value1', 'salt')
     assert_equal 'd21fe9523421f12daad064fd082913fd', digest
   end
   test 'method sha1 works correctly' do
-    conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:sha1].call(OpenStruct.new)
+    conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:sha1].call(Opts.new)
     digest = conv.call('value2', 'salt')
     assert_equal 'd2ed8e797065322371012fd8c1a39682987ddb71', digest
   end
   test 'method sha256 works correctly' do
-    conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:sha256].call(OpenStruct.new)
+    conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:sha256].call(Opts.new)
     digest = conv.call('value3', 'salt')
     assert_equal 'd70daf9654b8a3ba335f8f9f9638a93e8eba6763a0012ac44a928857871abe82', digest
   end
   test 'method sha384 works correctly' do
-    conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:sha384].call(OpenStruct.new)
+    conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:sha384].call(Opts.new)
     digest = conv.call('value4', 'salt')
     assert_equal '646192f8b1ea905238df589a00a10598a53eb245df4ab14b7e9eccf80c37386c99abe5259ccb2ba950003423fa0790ee', digest
   end
   test 'method sha512 works correctly' do
-    conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:sha512].call(OpenStruct.new)
+    conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:sha512].call(Opts.new)
     digest = conv.call('value5', 'salt')
     expected = '47c82bfea3783c20e3ba3629f0f827bebf0fa65a9104ada5339e5776e5958f061fe7114bfbe1e9d410aff43c6bee8365adf4fdd072e54ab4fffad820f354f545'
     assert_equal expected, digest
   end
   test 'method uri_path removes path, query parameters, fragment, user and password of uri strings' do
-    conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:uri_path].call(OpenStruct.new)
+    conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:uri_path].call(Opts.new)
     assert_equal '/my/path', conv.call('/my/path', '')
     assert_equal 'yay/unknown/format', conv.call('yay/unknown/format', '')
     assert_equal 'http://example.com/', conv.call('http://example.com/path/to/secret', '')
@@ -92,7 +94,7 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     assert_equal 'http://example.com/', conv.call('http://tagomoris:secret!@example.com/path/to/secret?a=b#xxx', '')
   end
   test 'method network masks ipaddresses with specified mask bit lengths' do
-    conf = OpenStruct.new(ipv4_mask_bits: 24, ipv6_mask_bits: 104)
+    conf = Opts.new(ipv4_mask_bits: 24, ipv6_mask_bits: 104)
     conv = Fluent::Plugin::AnonymizerFilter::MASK_METHODS[:network].call(conf)
     assert_equal '192.168.1.0', conv.call('192.168.1.1', '')
     assert_equal '10.110.18.0', conv.call('10.110.18.9', '')
@@ -119,7 +121,7 @@ class AnonymizerFilterTest < Test::Unit::TestCase
   end
 
   test 'masker_for_key generates a lambda for conversion with exact key match' do
-    conf = OpenStruct.new(salt: 's')
+    conf = Opts.new(salt: 's')
     plugin = create_driver.instance
     conv = ->(v,salt){ "#{v.upcase}:#{salt}" } # it's dummy for test
     masker = plugin.masker_for_key(conv, 'kkk', conf)
@@ -132,7 +134,7 @@ class AnonymizerFilterTest < Test::Unit::TestCase
   end
 
   test 'masker_for_key_chain generates a lambda for conversion with recursive key fetching' do
-    conf = OpenStruct.new(salt: 's')
+    conf = Opts.new(salt: 's')
     plugin = create_driver.instance
     conv = ->(v,salt){ "#{v.upcase}:#{salt}" } # it's dummy for test
     masker = plugin.masker_for_key_chain(conv, ['a', 'b', 'c'], conf)
@@ -147,7 +149,7 @@ class AnonymizerFilterTest < Test::Unit::TestCase
   end
 
   test 'masker_for_key_pattern generates a lambda for conversion with key pattern match' do
-    conf = OpenStruct.new(salt: 's')
+    conf = Opts.new(salt: 's')
     plugin = create_driver.instance
     conv = ->(v,salt){ "#{v.upcase}:#{salt}" } # it's dummy for test
     masker = plugin.masker_for_key_pattern(conv, '^k+$', conf)
@@ -162,7 +164,7 @@ class AnonymizerFilterTest < Test::Unit::TestCase
   end
 
   test 'masker_for_value_pattern' do
-    conf = OpenStruct.new(salt: 's')
+    conf = Opts.new(salt: 's')
     plugin = create_driver.instance
     conv = ->(v,salt){ "#{v.upcase}:#{salt}" } # it's dummy for test
     masker = plugin.masker_for_value_pattern(conv, '^x+$', conf)
@@ -177,7 +179,7 @@ class AnonymizerFilterTest < Test::Unit::TestCase
   end
 
   test 'masker_for_value_pattern matches a Hash in the format before Ruby 3.4' do
-    conf = OpenStruct.new(salt: 's')
+    conf = Opts.new(salt: 's')
     plugin = create_driver.instance
     conv = ->(v,salt){ "masked:#{salt}" } # it's dummy for test
     masker = plugin.masker_for_value_pattern(conv, '"k"=>"v"', conf)
@@ -426,7 +428,7 @@ class AnonymizerFilterTest < Test::Unit::TestCase
   end
 
   test 'masker_for_value_in_subnet' do
-    conf = OpenStruct.new(salt: 's')
+    conf = Opts.new(salt: 's')
     plugin = create_driver.instance
     conv = ->(v,salt){ "#{v.upcase}:#{salt}" } # it's dummy for test
     masker = plugin.masker_for_value_in_subnet(conv, '192.168.0.0/16', conf)
@@ -618,12 +620,76 @@ CONF
     "nest" => {"id" => "42", "ip" => "192.168.1.10", "null" => nil, "deep" => {"id" => "7"}},
   }
   V1_CONFIGS = {
+    "md5_keys" => [
+      "md5_keys user_id, null, nest.id\nhash_salt s",
+      {"user_id"=>"96f00994e47070f3462c11221ea6453d", "null"=>"03c7c0ace395d80182db07ae2c30f034", "nest"=>{"id"=>"18bbcb6a0c4cf10d6d3261dec664c3b2", "ip"=>"192.168.1.10", "null"=>nil, "deep"=>{"id"=>"7"}}},
+    ],
+    "sha1_keys" => [
+      "sha1_keys member_id, false, list, nest.deep.id\nhash_salt s",
+      {"member_id"=>"5dd5d5d89d592e2624b117f9a169e4ea36e7e416", "false"=>"60c2454acc39438e4dd40f221d576191fa5312f3", "list"=>["9a451d9700dc8e94edb4a09ec98b9a74eee5af9a", "96fb565aee67d77a4424c71ea291e387e5bc50cf"], "nest"=>{"id"=>"42", "ip"=>"192.168.1.10", "null"=>nil, "deep"=>{"id"=>"090d0d664750da3bd07aa408d2cd18dae6443b8e"}}},
+    ],
+    "sha256_keys" => [
+      "sha256_keys mail, num, empty, hash\nhash_salt s",
+      {"mail"=>"eb13eea2534a5bce279ecd282342ef33d75d9f5e38fa9351f7087dca39807338", "num"=>"e903fcd0a7b9e8f14bd1ad2540112430d3ab460037058c2487a0514f4c679159", "empty"=>"043a718774c572bd8a25adbeb1bfcd5c0256ae11cecf9f9c3f925d0e52beaf89", "hash"=>"eab3ab975b0d403d450f37d07703e7dc29e15648247e8fafe2fd4d61841d4ca3"},
+    ],
+    "sha384_keys" => [
+      "sha384_keys user_id, nest.null, missing, nest.missing, missing.id\nhash_salt s",
+      {"user_id"=>"642ec42830e1bb8d4f792fbd92c68691c0d0ec5ef25a95ff70b9066196f35d3765e567678f176c68bf62a55cf9c89615", "nest"=>{"id"=>"42", "ip"=>"192.168.1.10", "null"=>"5335f048bddebe600ae6edb89b36da3a2d7c18bc53b83e2fa577cc9a4f262fc1c3741830955303a0158e7d48be7965f8", "deep"=>{"id"=>"7"}}},
+    ],
+    "sha512_keys" => [
+      "sha512_keys user.name, user id\nhash_salt s",
+      {"user id"=>"c07f46aea4c7b7224849ad12674d21ab47f3701e849188e6db708ffc85ac2fee9caebcb0941ede02d7be7a3348006b5efa1ea13e3e08ac96b1b3e12cb21728d9"},
+    ],
+    "without hash_salt" => [
+      "sha1_keys user_id, member_id",
+      {"user_id"=>"522b276a356bdf39013dfabea2cd43e141ecc9e8", "member_id"=>"8cb2237d0679ca88db6464eac60da96345513964"},
+    ],
+    "ipaddr_mask_keys" => [
+      "ipaddr_mask_keys host, host6, mapped, not_ip, ips, null, num, nest.ip",
+      {"host"=>"10.102.3.0", "host6"=>"2001:db8:0:8d3:0:8a2e::", "mapped"=>"::ffff:129.0.0.0", "ips"=>["10.1.2.0", "2001:db8::"], "nest"=>{"id"=>"42", "ip"=>"192.168.1.0", "null"=>nil, "deep"=>{"id"=>"7"}}},
+    ],
+    "ipaddr_mask_keys with subnets" => [
+      "ipaddr_mask_keys host, host6, mapped, ips\nipv4_mask_subnet 16\nipv6_mask_subnet 64",
+      {"host"=>"10.102.0.0", "host6"=>"2001:db8:0:8d3::", "mapped"=>"::", "ips"=>["10.1.0.0", "2001:db8::"]},
+    ],
+    "README of v1.0.0" => [
+      "sha1_keys user_id, member_id, mail\nhash_salt mysaltstring\nipaddr_mask_keys host, host6\nipv4_mask_subnet 24\nipv6_mask_subnet 104",
+      {"host"=>"10.102.3.0", "host6"=>"2001:db8:0:8d3:0:8a2e::", "user_id"=>"1feb6da4f401a00d5f2daad4264e3e7ed76cb10b", "member_id"=>"5ab2cebb0537866c4a0cd2e2f3502c0976b788da", "mail"=>"7e9d6dbefa72d56056c8c740b34b5c0bbfec8d87"},
+    ],
+    # md5, and then sha1.
+    "same key in two methods" => [
+      "sha1_keys user_id\nmd5_keys user_id\nhash_salt s",
+      {"user_id"=>"99d26035109899371f3c179799edb25e754af32a"},
+    ],
+    # All <mask> sections with salt, and then the parameters of v1.0.0 with hash_salt.
+    "with mask" => [
+      "salt masksalt\nsha1_keys user_id, mail\nhash_salt s\nipaddr_mask_keys host\n<mask md5>\n  keys user_id, member_id\n</mask>\n<mask network>\n  keys host6\n  ipv6_mask_bits 32\n</mask>",
+      {"host"=>"10.102.3.0", "host6"=>"2001:db8::", "user_id"=>"bc196013cd693c547cbe6dae8d92e259686f0eda", "member_id"=>"3db8a072a1d768eb3ab8b30884f54bee", "mail"=>"56770df5295b4990c99125a3ed9bc2ffb95b9044"},
+    ],
+    "key in mask" => [
+      "<mask sha1>\n  key user.name\n  keys user_id\n  salt s\n</mask>",
+      {"user_id"=>"529ce2c4ebc3f73235ec9831facc1563fe407453", "user.name"=>"e3a633c4aa4f56f1782b222125030d280351ec2e"},
+    ],
+    "key_chain and key_chains in mask" => [
+      "<mask sha1>\n  key_chain nest.deep.id\n  key_chains nest.id, nest.null, nest.missing, missing.id\n  salt s\n</mask>",
+      {"nest"=>{"id"=>"f385cb9f3a25fd64b6fc0961aff333e0e45f3385", "ip"=>"192.168.1.10", "null"=>"a0f1490a20d0211c997b44bc357e1972deab8ae3", "deep"=>{"id"=>"090d0d664750da3bd07aa408d2cd18dae6443b8e"}}},
+    ],
+    "key_chains of network" => [
+      "<mask network>\n  key_chains [\"nest.ip\"]\n  ipv4_mask_bits 24\n</mask>",
+      {"nest"=>{"id"=>"42", "ip"=>"192.168.1.0", "null"=>nil, "deep"=>{"id"=>"7"}}},
+    ],
+    "key_chain with salts" => [
+      "salts [\"s1\", \"s2\"]\n<mask sha1>\n  key_chain nest.id\n</mask>",
+      {"nest"=>{"id"=>"f6ed84f75e62bed55fe01af8bcbead8000013bad", "ip"=>"192.168.1.10", "null"=>nil, "deep"=>{"id"=>"7"}}},
+    ],
     # keys is not deprecated, but its output had changed from v1.0.0.
     "keys with a dot, null and false" => [
       "<mask sha1>\n  keys user.name, null, false\n  salt s\n</mask>",
       {"null"=>"a0f1490a20d0211c997b44bc357e1972deab8ae3", "false"=>"60c2454acc39438e4dd40f221d576191fa5312f3", "user.name"=>"e3a633c4aa4f56f1782b222125030d280351ec2e"},
     ],
   }
+  DEPRECATED_PARAMS = %w[md5_keys sha1_keys sha256_keys sha384_keys sha512_keys hash_salt
+                         ipaddr_mask_keys ipv4_mask_subnet ipv6_mask_subnet key key_chain key_chains]
 
   sub_test_case "configurations of v1.0.0" do
     data(V1_CONFIGS)
@@ -632,6 +698,43 @@ CONF
       d.run(default_tag: 'test') { d.feed(@time, Marshal.load(Marshal.dump(V1_INPUT))) }
       assert_equal [V1_INPUT.merge(changed)], d.filtered_records
       assert_equal [], d.logs.grep(/\[error\]/)
+    end
+
+    data(V1_CONFIGS)
+    test "warn once for each deprecated parameter" do |(conf, _)|
+      d = create_driver(conf)
+      names = conf.scan(/^\s*(\w+)/).flatten & DEPRECATED_PARAMS
+      warnings = d.logs.grep(/parameter is deprecated/)
+      names.each do |name|
+        assert_equal 1, warnings.grep(/'#{name}' parameter is deprecated/).size, "#{name} in #{warnings}"
+      end
+      assert_equal names.size, warnings.size, warnings.inspect
+      assert_equal [], d.logs.grep(/Error/), "the compat check reads a word Error as a failure"
+    end
+
+    test "the syntax of <mask> does not warn" do
+      d = create_driver(CONFIG)
+      assert_equal [], d.logs.grep(/deprecated/)
+    end
+
+    test "ipv4_mask_subnet and ipv6_mask_subnet default to 24 and 104" do
+      d = create_driver("ipaddr_mask_keys host, host6")
+      d.run(default_tag: 'test') { d.feed(@time, {"host" => "10.102.3.80", "host6" => "2001:db8:0:8d3:0:8a2e:70:7344"}) }
+      assert_equal [{"host" => "10.102.3.0", "host6" => "2001:db8:0:8d3:0:8a2e::"}], d.filtered_records
+      assert_equal [], d.logs.grep(/deprecated: .*mask_subnet/)
+    end
+
+    test "hash_salt alone configures nothing, as v1.0.0" do
+      assert_raise_message(/no anonymizing operations configured/) do
+        create_driver("hash_salt s")
+      end
+    end
+
+    test "a path through a value that is not a Hash leaves the record as it is" do
+      d = create_driver("sha1_keys user_id.x, nest.id.x\nhash_salt s")
+      record = {"user_id" => "alice", "nest" => {"id" => "42"}}
+      d.run(default_tag: 'test') { d.feed(@time, Marshal.load(Marshal.dump(record))) }
+      assert_equal [record], d.filtered_records
     end
   end
 
@@ -648,6 +751,12 @@ CONF
       d.run(default_tag: 'test') { d.feed(@time, {"a" => "alice", "b" => nil}) }
       assert_equal [{"a" => OpenSSL::Digest.new("sha1").update("s").update("alice").hexdigest, "b" => nil}], d.filtered_records
       assert_equal [], d.logs.grep(/\[error\]/)
+    end
+
+    test "key is a top-level key even if it starts with $, as v1.0.0" do
+      d = create_driver("<mask sha1>\n  key $.a\n  salt s\n</mask>")
+      d.run(default_tag: 'test') { d.feed(@time, {"$.a" => "alice", "a" => "bob"}) }
+      assert_equal [{"$.a" => OpenSSL::Digest.new("sha1").update("s").update("alice").hexdigest, "a" => "bob"}], d.filtered_records
     end
 
     test "keys with a value that is not a String starts, as v1.0.0" do
