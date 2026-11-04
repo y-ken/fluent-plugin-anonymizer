@@ -205,6 +205,255 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     assert_equal 6, r.size
   end
 
+  test 'masker_for_value_pattern matches a Hash in the format before Ruby 3.4' do
+    conf = OpenStruct.new(salt: 's')
+    plugin = create_driver.instance
+    conv = ->(v,salt){ "masked:#{salt}" } # it's dummy for test
+    masker = plugin.masker_for_value_pattern(conv, '"k"=>"v"', conf)
+    r = masker.call({"h" => {"k" => "v"}, "s" => "x"})
+    assert_equal "masked:s", r["h"]
+    assert_equal "x", r["s"]
+  end
+
+  test 'stringify writes a Hash and an Array as Ruby 3.3 inspects them' do
+    stringify = Fluent::Plugin::AnonymizerFilter.method(:stringify)
+    assert_equal 'abc', stringify.call('abc')
+    assert_equal '12', stringify.call(12)
+    assert_equal '', stringify.call(nil)
+    assert_equal '{}', stringify.call({})
+    assert_equal '[]', stringify.call([])
+    assert_equal '{"a"=>{"b"=>[1, {"c"=>nil}], "d"=>2.5}, "e"=>[]}',
+                 stringify.call({"a" => {"b" => [1, {"c" => nil}], "d" => 2.5}, "e" => []})
+    assert_equal '[{"x"=>1}, "y"]', stringify.call([{"x" => 1}, "y"])
+    assert_equal '{:sym=>1, :"foo bar"=>"x", 1=>2, nil=>true}',
+                 stringify.call({:sym => 1, :"foo bar" => "x", 1 => 2, nil => true})
+    assert_equal '{"q\\"d"=>"new\\nline"}', stringify.call({"q\"d" => "new\nline"})
+  end
+
+  test 'stringify is public and its helpers are private' do
+    assert_true Fluent::Plugin::AnonymizerFilter.respond_to?(:stringify)
+    assert_false Fluent::Plugin::AnonymizerFilter.respond_to?(:inspect_before_ruby34)
+    assert_false Fluent::Plugin::AnonymizerFilter.respond_to?(:plain_container?)
+  end
+
+  # The expected strings are in the format of to_s on Ruby 3.3. Each pattern
+  # for value_pattern does not start with a quote, which the config parser
+  # would read as a quoted string.
+  DEEP = 3000
+  NESTED_VALUES = {
+    "Hash nested 3,000 levels deep" => [
+      -> { v = "alice"; DEEP.times { v = {"k" => v} }; v },
+      '{"k"=>' * DEEP + '"alice"' + '}' * DEEP,
+      'alice',
+    ],
+    "Array nested 3,000 levels deep" => [
+      -> { v = "alice"; DEEP.times { v = [v] }; v },
+      '[' * DEEP + '"alice"' + ']' * DEEP,
+      'alice',
+    ],
+    "direct cycle of a Hash" => [
+      -> { h = {"a" => 1}; h["self"] = h; h },
+      '{"a"=>1, "self"=>{...}}',
+      'self"=>\{\.\.\.\}\}$',
+    ],
+    "direct cycle of an Array" => [
+      -> { a = [1]; a << a; a },
+      '[1, [...]]',
+      '^\[1, \[\.\.\.\]\]$',
+    ],
+    "indirect cycle" => [
+      -> { h1 = {}; h2 = {}; h1["x"] = h2; h2["x"] = h1; h1 },
+      '{"x"=>{"x"=>{...}}}',
+      '^\{"x"=>\{"x"=>\{\.\.\.\}\}\}$',
+    ],
+    "indirect cycle through an Array" => [
+      -> { a = []; a << {"y" => a} << 2; a },
+      '[{"y"=>[...]}, 2]',
+      'y"=>\[\.\.\.\]\}, 2\]$',
+    ],
+    "shared container that is not a cycle" => [
+      -> { s = {"k" => "v"}; l = [1, s]; {"a" => s, "b" => s, "c" => [l, l]} },
+      '{"a"=>{"k"=>"v"}, "b"=>{"k"=>"v"}, "c"=>[[1, {"k"=>"v"}], [1, {"k"=>"v"}]]}',
+      'b"=>\{"k"=>"v"\}, "c"=>\[\[1, \{"k"=>"v"\}\], \[1, \{',
+    ],
+  }
+
+  def sha256(salt, str)
+    OpenSSL::Digest.new("sha256").update(salt).update(str).hexdigest
+  end
+
+  class HashWithInspect < Hash
+    def inspect; "HASH"; end
+  end
+  class ArrayWithInspect < Array
+    def inspect; "ARRAY"; end
+  end
+  class PlainSubHash < Hash; end
+  class InspectNil
+    def inspect; nil; end
+  end
+  class InspectInteger
+    def inspect; 65; end
+  end
+  class HashWithMethodKey < Hash
+    def method; self["method"]; end
+  end
+  class HashFakingClass < Hash
+    def inspect; "FAKE"; end
+    def class; Hash; end
+  end
+  class BasicWithInspect < BasicObject
+    def inspect; "BASIC"; end
+  end
+  module InspectModule
+    def inspect; "MODULE"; end
+  end
+  module ToSModule
+    def to_s; "MODULE_TO_S"; end
+  end
+
+  # The values in the review of #37. Each is not plain, so it uses to_s of the
+  # running Ruby, as master does.
+  class StringWithToS < String
+    def to_s; "alice"; end
+  end
+  class ArrayWithIndex < Array
+    def [](i); "bob"; end
+  end
+  class HashWithKeys < Hash
+    def keys; ["other"]; end
+    def values; ["bob"]; end
+  end
+  class PrivateInspect
+    def inspect; "alice"; end
+    private :inspect
+  end
+  class PrivateToS
+    def to_s; "alice"; end
+    private :to_s
+  end
+  class InspectPrivateToS
+    def inspect; PrivateToS.new; end
+  end
+  class InspectUTF16
+    def inspect; "alice".encode("UTF-16LE"); end
+  end
+  StructRef = Struct.new(:ref)
+  class InspectAppends
+    def initialize(array); @array = array; end
+    def inspect; @array << "alice"; "first"; end
+  end
+  class InspectNonASCII
+    def inspect; "é"; end
+  end
+
+  # Each value is built anew for each call, because inspect may change it.
+  NOT_PLAIN_VALUES = {
+    "nested subclass with its own inspect" => -> { {"h" => HashWithInspect["k", "v"], "a" => [ArrayWithInspect[1]]} },
+    "subclass with its own inspect, but not to_s" => -> { HashWithInspect["k", "v"] },
+    "subclass without its own inspect" => -> { [PlainSubHash["k", [PlainSubHash["x", 1]]]] },
+    "inspect that returns nil" => -> { [InspectNil.new] },
+    "inspect that returns an Integer" => -> { {"k" => InspectInteger.new} },
+    "subclass with a method named method" => -> { [HashWithMethodKey["method", "GET"], {"a" => HashWithMethodKey["method", "PUT"]}] },
+    "subclass that returns Hash from class" => -> { [HashFakingClass["k", 1]] },
+    "BasicObject" => -> { [BasicWithInspect.new] },
+    "singleton inspect" => -> { h = {"k" => "v"}; def h.inspect; "SINGLE"; end; {"h" => h} },
+    "singleton to_s" => -> { h = {"k" => "v"}; def h.to_s; "SINGLE_TO_S"; end; h },
+    "inspect from extend" => -> { [{"k" => "v"}.extend(InspectModule)] },
+    "to_s from extend" => -> { {"k" => "v"}.extend(ToSModule) },
+    "String subclass with its own to_s" => -> { StringWithToS.new("raw") },
+    "Array subclass with its own []" => -> { ArrayWithIndex["alice"] },
+    "Hash subclass with its own keys and values" => -> { HashWithKeys["secret", "alice"] },
+    "private inspect" => -> { [PrivateInspect.new] },
+    "inspect that returns a value with a private to_s" => -> { [InspectPrivateToS.new] },
+    "inspect that returns UTF-16LE" => -> { [InspectUTF16.new] },
+    "Struct with a cycle" => -> { a = []; a << StructRef.new(a); a },
+    "inspect that adds to the Array" => -> { a = []; a << InspectAppends.new(a); a },
+    "String subclass inside" => -> { {"k" => StringWithToS.new("raw")} },
+    "Struct holding a Hash" => -> { [StructRef.new({"k" => "v"})] },
+    "inspect undefined, with method_missing" => -> {
+      h = {"k" => "v"}
+      h.singleton_class.send(:undef_method, :inspect)
+      def h.method_missing(*); "MISSING"; end
+      [h]
+    },
+    "to_s undefined, with method_missing" => -> {
+      h = {"k" => "v"}
+      h.singleton_class.send(:undef_method, :to_s)
+      def h.method_missing(*); "MISSING"; end
+      h
+    },
+  }
+
+  data(NOT_PLAIN_VALUES)
+  test 'stringify uses to_s for a value that is not plain' do |build|
+    assert_equal build.call.to_s, Fluent::Plugin::AnonymizerFilter.stringify(build.call)
+  end
+
+  data(NOT_PLAIN_VALUES)
+  test 'keys masks a value that is not plain with sha256 of to_s' do |build|
+    conf = %[
+      <mask sha256>
+        keys secret
+        salt s
+      </mask>
+    ]
+    filtered = filter(conf, [{"secret" => build.call}])
+    assert_equal [{"secret" => sha256("s", build.call.to_s)}], filtered
+  end
+
+  # Ruby escapes a result of inspect that is not ASCII-only and not in the
+  # default encoding.
+  test 'stringify follows the escape of a result of inspect in another encoding' do
+    verbose, $VERBOSE = $VERBOSE, nil
+    external, internal = Encoding.default_external, Encoding.default_internal
+    Encoding.default_external = Encoding::US_ASCII
+    Encoding.default_internal = nil
+    # Ruby writes "\u00E9" for the inspect of this object.
+    assert_equal '[\u00E9]', [InspectNonASCII.new].to_s
+    assert_equal '[\u00E9]', Fluent::Plugin::AnonymizerFilter.stringify([InspectNonASCII.new])
+    # String#inspect escapes it by itself, so the old format is kept.
+    assert_equal '{"k"=>"\u00E9"}', Fluent::Plugin::AnonymizerFilter.stringify({"k" => "\u00e9"})
+  ensure
+    Encoding.default_external = external
+    Encoding.default_internal = internal
+    $VERBOSE = verbose
+  end
+
+  test 'stringify writes a value with characters in the default encoding in the old format' do
+    omit_unless(Encoding.default_external == Encoding::UTF_8 && Encoding.default_internal.nil?)
+    assert_equal "{\"k\"=>\"é\"}", Fluent::Plugin::AnonymizerFilter.stringify({"k" => "é"})
+  end
+
+  data(NESTED_VALUES)
+  test 'stringify writes deep, cyclic and shared values without recursion' do |(build, expected, _)|
+    assert_equal expected, Fluent::Plugin::AnonymizerFilter.stringify(build.call)
+  end
+
+  data(NESTED_VALUES)
+  test 'keys masks deep, cyclic and shared values with sha256' do |(build, expected, _)|
+    conf = %[
+      <mask sha256>
+        keys secret
+        salt s
+      </mask>
+    ]
+    filtered = filter(conf, [{"n" => 1, "secret" => build.call}])
+    assert_equal [{"n" => 1, "secret" => sha256("s", expected)}], filtered
+  end
+
+  data(NESTED_VALUES)
+  test 'value_pattern masks deep, cyclic and shared values with sha256' do |(build, expected, pattern)|
+    conf = %[
+      <mask sha256>
+        value_pattern #{pattern}
+        salt s
+      </mask>
+    ]
+    filtered = filter(conf, [{"n" => 1, "secret" => build.call}])
+    assert_equal [{"n" => 1, "secret" => sha256("s", expected)}], filtered
+  end
+
   test 'masker_for_value_in_subnet' do
     conf = OpenStruct.new(salt: 's')
     plugin = create_driver.instance
@@ -362,6 +611,7 @@ CONF
     expected = {
       'host' => '10.102.3.0',
       'array' => ["e3cbba8883fe746c6e35783c9404b4bc0c7ee9eb", "a4ac914c09d7c097fe1f4f96b897e625b6922069"],
+      # The same digest on every Ruby version, though Ruby 3.4 changed Hash#inspect.
       'hash' => '1a1903d78aed9403649d61cb21ba6b489249761b'
     }
     filtered = filter(conf, messages)

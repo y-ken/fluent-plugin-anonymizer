@@ -8,6 +8,7 @@ Fluentd filter plugin to anonymize records with [OpenSSL::Digest](https://docs.r
 
 | fluent-plugin-anonymizer | fluentd    | ruby   |
 |--------------------|------------|--------|
+|  master (not released yet) | v0.14.x | >= 2.7 |
 |  1.0.0            | v0.14.x | >= 2.1 |
 |  0.5.1            | v0.12.x | >= 1.9 |
 
@@ -140,6 +141,16 @@ Round number for following one or more keys. It makes easy to aggregate calculat
 
 
 ## Notes
+
+* Hash and Array values on Ruby 3.4 and later
+
+The hash methods and `value_pattern` read a value as a string with `to_s`. Ruby 3.4 changed `Hash#inspect`, which `to_s` uses, from `{"k"=>"v"}` to `{"k" => "v"}`. So on Ruby 3.4 and later, this plugin writes a plain Hash or Array in the format of Ruby 3.3 and earlier, such as `{"k"=>"v"}`. A plain value is a Hash or an Array that holds only plain Hashes and Arrays, strings, symbols, integers, floats, `nil`, `true` and `false`, with none of its classes or methods changed. Any other value uses `to_s` of the running Ruby, as before. For example, a Struct that holds a Hash is written in the format of the running Ruby.
+
+On Ruby 3.4 and later, this changes the digest of a non-empty Hash value, and of an Array value that contains a non-empty Hash, from the one made by the previous version of this plugin. These values go back to the digest made on Ruby 3.3 and earlier.
+
+A `value_pattern` written for the Ruby 3.4 format, such as `"k" => "v"`, no longer matches these values, so it no longer masks them. Change such a pattern to the format of Ruby 3.3 and earlier, such as `"k"=>"v"`.
+
+Even for a plain value, a character inside a Hash or an Array may be written differently on another Ruby version, so its digest may change. For example, U+1FAE9 is written as `\u{1FAE9}` on Ruby 3.3 and 3.4, and as the character itself on Ruby 4.0. Ruby 4.0 writes many characters as they are, which Ruby 3.3 and 3.4 write as escapes.
 
 * hashing nested value behavior is compatible with [LogStash::Filters::Anonymize](https://github.com/logstash-plugins/logstash-filter-anonymize/blob/master/lib/logstash/filters/anonymize.rb) does. For further details, please check it out the test code at [test_emit_nest_value](https://github.com/y-ken/fluent-plugin-anonymizer/blob/master/test/plugin/test_filter_anonymizer.rb#L231).
 
