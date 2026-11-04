@@ -294,6 +294,22 @@ class AnonymizerFilterTest < Test::Unit::TestCase
   class InspectInteger
     def inspect = 65
   end
+  class HashWithMethodKey < Hash
+    def method = self["method"]
+  end
+  class HashFakingClass < Hash
+    def inspect = "FAKE"
+    def class = Hash
+  end
+  class BasicWithInspect < BasicObject
+    def inspect = "BASIC"
+  end
+  module InspectModule
+    def inspect = "MODULE"
+  end
+  module ToSModule
+    def to_s = "MODULE_TO_S"
+  end
 
   # Like to_s on Ruby 3.3, which calls the inspect of each value inside, and
   # to_s for the value itself.
@@ -317,6 +333,34 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     "inspect that returns an Integer" => [
       -> { {"k" => InspectInteger.new} },
       '{"k"=>65}',
+    ],
+    "subclass with a method named method" => [
+      -> { [HashWithMethodKey["method", "GET"], {"a" => HashWithMethodKey["method", "PUT"]}] },
+      '[{"method"=>"GET"}, {"a"=>{"method"=>"PUT"}}]',
+    ],
+    "subclass that returns Hash from class" => [
+      -> { [HashFakingClass["k", 1]] },
+      '[FAKE]',
+    ],
+    "BasicObject" => [
+      -> { [BasicWithInspect.new] },
+      '[BASIC]',
+    ],
+    "singleton inspect" => [
+      -> { h = {"k" => "v"}; def h.inspect = "SINGLE"; {"h" => h} },
+      '{"h"=>SINGLE}',
+    ],
+    "singleton to_s" => [
+      -> { h = {"k" => "v"}; def h.to_s = "SINGLE_TO_S"; h },
+      'SINGLE_TO_S',
+    ],
+    "inspect from extend" => [
+      -> { [{"k" => "v"}.extend(InspectModule)] },
+      '[MODULE]',
+    ],
+    "to_s from extend" => [
+      -> { {"k" => "v"}.extend(ToSModule) },
+      'MODULE_TO_S',
     ],
   }
 

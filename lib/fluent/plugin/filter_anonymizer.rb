@@ -37,7 +37,8 @@ module Fluent::Plugin
     # Returns the string that a value is masked as. A Hash or an Array is
     # written as Hash#inspect and Array#inspect wrote it before Ruby 3.4,
     # which changed {"a"=>1} to {"a" => 1}, so that its digest does not change
-    # with the Ruby version.
+    # with the Ruby version. As in to_s, a value that has its own to_s, or its
+    # own inspect inside a Hash or an Array, is written with that method.
     def self.stringify(v)
       case v
       when String then v
@@ -47,11 +48,15 @@ module Fluent::Plugin
       end
     end
 
+    KERNEL_METHOD = Kernel.instance_method(:method)
+    KERNEL_TO_S = Kernel.instance_method(:to_s)
+    private_constant :KERNEL_METHOD, :KERNEL_TO_S
+
     # Whether v, a Hash or an Array, uses the built-in method to write itself,
-    # rather than one that a subclass or a module defines.
+    # rather than one that its class, a module or v itself defines. It uses
+    # Kernel#method, because a subclass may define a method named method.
     def self.builtin_inspect?(v, name)
-      return true if v.class.equal?(Hash) || v.class.equal?(Array)
-      owner = v.method(name).owner
+      owner = KERNEL_METHOD.bind_call(v, name).owner
       owner.equal?(Hash) || owner.equal?(Array)
     end
     private_class_method :builtin_inspect?
@@ -69,7 +74,7 @@ module Fluent::Plugin
       stack = []
       v = value # a Hash or an Array to write next
       while true
-        hash = v.is_a?(Hash)
+        hash = Hash === v
         if open.key?(v)
           buf << (hash ? "{...}" : "[...]")
         elsif v.empty?
@@ -95,15 +100,16 @@ module Fluent::Plugin
               x = values ? items[i >> 1] : items[i]
             end
             i += 1
-            if (x.is_a?(Hash) || x.is_a?(Array)) && builtin_inspect?(x, :inspect)
+            # Module#=== works for a BasicObject, which has no is_a?.
+            if (Hash === x || Array === x) && builtin_inspect?(x, :inspect)
               v = x
               break
             end
             s = x.inspect
             # Like inspect, convert a result that is not a String.
-            unless s.is_a?(String)
+            unless String === s
               t = s.to_s
-              s = t.is_a?(String) ? t : Kernel.instance_method(:to_s).bind_call(s)
+              s = String === t ? t : KERNEL_TO_S.bind_call(s)
             end
             buf << s
           end
