@@ -1,4 +1,5 @@
 require 'fluent/plugin/filter'
+require 'fluent/plugin_helper/record_accessor'
 require 'openssl'
 require 'uri'
 require 'ipaddr'
@@ -31,8 +32,6 @@ require 'ipaddr'
 module Fluent::Plugin
   class AnonymizerFilter < Filter
     Fluent::Plugin.register_filter('anonymizer', self)
-
-    helpers :record_accessor
 
     # Returns the string that a value is masked as, which is to_s of the value.
     # Ruby 3.4 changed Hash#inspect from {"a"=>1} to {"a" => 1}. So on Ruby 3.4
@@ -251,35 +250,17 @@ EOF
         end
 
         conv = MASK_METHODS[c.method].call(c)
-        [*c.keys].compact.each do |key|
-          key = convert_compat_key(key)
-          if mask_with_key_chain?(key)
-            @masks << masker_for_key_chain(conv, key, c)
+        c.keys.each do |key|
+          path = key_path(key)
+          if path.is_a?(Array)
+            @masks << masker_for_key_chain(conv, path, c)
           else
-            @masks << masker_for_key(conv, key, c)
+            @masks << masker_for_key(conv, path, c)
           end
         end
         @masks << masker_for_key_pattern(conv, c.key_pattern, c) if c.key_pattern
         @masks << masker_for_value_pattern(conv, c.value_pattern, c) if c.value_pattern
         @masks << masker_for_value_in_subnet(conv, c.value_in_subnet, c) if c.value_in_subnet
-      end
-
-      if @ipaddr_mask_keys
-        @salt_list << (@hash_salt || '') if @salt_list.empty? # to suppress ConfigError for salt missing
-        conf = OpenStruct.new
-        conf.salt = @hash_salt || ''
-        conf.mask_array_elements = true
-        conf.ipv4_mask_bits = @ipv4_mask_subnet
-        conf.ipv6_mask_bits = @ipv6_mask_subnet
-        conv = MASK_METHODS[:network].call(conf)
-        @ipaddr_mask_keys.split(',').map(&:strip).each do |key|
-          key = convert_compat_key(key)
-          if mask_with_key_chain?(key)
-            @masks << masker_for_key_chain(conv, key, conf)
-          else
-            @masks << masker_for_key(conv, key, conf)
-          end
-        end
       end
 
       if @masks.size < 1
@@ -294,16 +275,38 @@ EOF
       record.update(@masks.reduce(record){|r,mask| mask.call(r)})
     end
 
-    def convert_compat_key(key)
-      if key.include?('.') && !key.start_with?('$[')
-        key = "$.#{key}" unless key.start_with?('$.')
+    # Returns the key for a key in keys: an Array of keys for a key in the
+    # syntax of record_accessor ($.a.b or $['a']['b']), or the key itself for
+    # any other key, even if it has a dot or is not a String, as in v1.0.0.
+    def key_path(key)
+      if key.is_a?(String) && key.start_with?('$.', '$[')
+        Fluent::PluginHelper::RecordAccessor::Accessor.parse_parameter(key)
+      else
+        key
       end
-      key
     end
 
-    def mask_with_key_chain?(key)
-      key.include?('.') || key.start_with?('$[', '$.')
+    # Replaces the value at path in record with the value of the block, if
+    # the value exists, even if it is nil or false, as v1.0.0 does. path is an
+    # Array of keys of Hashes and indexes of Arrays.
+    def self.update_path(record, path)
+      container = record
+      path[0..-2].each do |key|
+        return unless child?(container, key)
+        container = container[key]
+      end
+      key = path[-1]
+      container[key] = yield(container[key]) if child?(container, key)
     end
+
+    def self.child?(container, key)
+      case container
+      when Hash then container.has_key?(key)
+      when Array then key.is_a?(Integer) && key >= -container.size && key < container.size
+      else false
+      end
+    end
+    private_class_method :child?
 
     def salt_determine(key)
       return @salt_map[key] if @salt_map.has_key?(key)
@@ -329,44 +332,26 @@ EOF
     def masker_for_key(conv, key, opts)
       for_each = opts.mask_array_elements
       salt = opts.salt || salt_determine(key)
-      accessor = record_accessor_create(key)
-      if for_each
-        ->(record){
-          begin
-            if raw_value = accessor.call(record)
-              record[key] = mask_value(raw_value, for_each){|v| conv.call(v, salt) }
-            end
-          rescue => e
-            log.error "unexpected error while masking value", error_class: e.class, error: e.message
-          end
-          record
-        }
-      else
-        ->(record){
-          begin
-            if raw_value = accessor.call(record)
-              record[key] = conv.call(raw_value, salt)
-            end
-          rescue => e
-            log.error "unexpected error while masking value", error_class: e.class, error: e.message
-          end
-          record
-        }
-      end
-    end
-
-    def masker_for_key_chain(conv, key, opts)
-      for_each = opts.mask_array_elements
-      accessor = record_accessor_create(key)
       ->(record){
         begin
-          raw_value = accessor.call(record)
-          keys = accessor.instance_variable_get(:@keys)
-          heading = keys[0..-2]
-          container = record.dig(*heading)
-          tailing = keys.last
-          if raw_value
-            container[tailing] = mask_value(raw_value, for_each){|v| conv.call(v, opts.salt || salt_determine(tailing)) }
+          if record.has_key?(key)
+            record[key] = mask_value(record[key], for_each){|v| conv.call(v, salt) }
+          end
+        rescue => e
+          log.error "unexpected error while masking value", error_class: e.class, error: e.message
+        end
+        record
+      }
+    end
+
+    # key_chain is an Array of keys.
+    def masker_for_key_chain(conv, key_chain, opts)
+      for_each = opts.mask_array_elements
+      salt = opts.salt || salt_determine(key_chain.last)
+      ->(record){
+        begin
+          self.class.update_path(record, key_chain) do |value|
+            mask_value(value, for_each){|v| conv.call(v, salt) }
           end
         rescue => e
           log.error "unexpected error while masking value", error_class: e.class, error: e.message
