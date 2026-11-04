@@ -34,45 +34,57 @@ module Fluent::Plugin
 
     helpers :record_accessor
 
-    # Returns the string that a value is masked as. A Hash or an Array is
-    # written as Hash#inspect and Array#inspect wrote it before Ruby 3.4,
-    # which changed {"a"=>1} to {"a" => 1}, so that its digest does not change
-    # with the Ruby version. As in to_s, a value that has its own to_s, or its
-    # own inspect inside a Hash or an Array, is written with that method.
+    # Returns the string that a value is masked as, which is to_s of the value.
+    # Ruby 3.4 changed Hash#inspect from {"a"=>1} to {"a" => 1}. So on Ruby 3.4
+    # and later, a plain Hash or Array is written in the format before Ruby
+    # 3.4, so that its digest does not change with the Ruby version. Any other
+    # value uses to_s of the running Ruby, as before.
     def self.stringify(v)
-      case v
-      when String then v
-      when Hash, Array
-        builtin_inspect?(v, :to_s) ? inspect_before_ruby34(v) : v.to_s
-      else v.to_s
+      if OLD_FORMAT_NEEDED && (Hash === v || Array === v)
+        s = inspect_before_ruby34(v)
+        return s if s
       end
+      v.to_s
     end
 
+    OLD_FORMAT_NEEDED = Gem::Version.new(RUBY_VERSION) >= Gem::Version.new("3.4")
+    KERNEL_CLASS = Kernel.instance_method(:class)
     KERNEL_METHOD = Kernel.instance_method(:method)
-    KERNEL_TO_S = Kernel.instance_method(:to_s)
-    private_constant :KERNEL_METHOD, :KERNEL_TO_S
+    private_constant :OLD_FORMAT_NEEDED, :KERNEL_CLASS, :KERNEL_METHOD
 
-    # Whether v, a Hash or an Array, uses the built-in method to write itself,
-    # rather than one that its class, a module or v itself defines. It uses
-    # Kernel#method, because a subclass may define a method named method.
-    def self.builtin_inspect?(v, name)
-      owner = KERNEL_METHOD.bind_call(v, name).owner
-      owner.equal?(Hash) || owner.equal?(Array)
+    # Whether v is a Hash or an Array of the exact class that uses the
+    # built-in method to write itself. It calls no method of v, which a
+    # subclass could override or make private.
+    def self.plain_container?(v, name)
+      klass = KERNEL_CLASS.bind_call(v)
+      return false unless klass.equal?(Hash) || klass.equal?(Array)
+      KERNEL_METHOD.bind_call(v, name).owner.equal?(klass)
     end
-    private_class_method :builtin_inspect?
+    private_class_method :plain_container?
 
-    # Uses a stack instead of recursion, so that a deeply nested value does
+    # Writes value, a Hash or an Array, as inspect wrote it before Ruby 3.4.
+    # Returns nil unless the value is plain: a Hash or an Array of the exact
+    # class with the built-in to_s, which contains only Hashes and Arrays of
+    # the exact class with the built-in inspect, Strings of the exact class,
+    # Symbols, Integers, Floats, nil, true and false, and the inspect of each
+    # of them is ASCII-only or in the default encoding, which Ruby does not
+    # convert.
+    #
+    # It uses a stack instead of recursion, so that a deeply nested value does
     # not raise SystemStackError. Like inspect, it writes {...} or [...] for a
     # container that is already open on the current path (a cycle), and
     # writes a container that is shared but is not a cycle in full each time.
     def self.inspect_before_ruby34(value)
+      return nil unless plain_container?(value, :to_s)
+      encoding = Encoding.default_internal || Encoding.default_external
+      encoding = nil unless encoding.ascii_compatible?
       buf = +""
       open = {}.compare_by_identity # the containers on the current path
       # 4 slots for each open container: the container, its keys or elements,
       # its values (nil for an Array), and the index of the next item. A Hash
       # has 2 items for each pair: the key and the value.
       stack = []
-      v = value # a Hash or an Array to write next
+      v = value # a plain Hash or Array to write next
       while true
         hash = Hash === v
         if open.key?(v)
@@ -100,17 +112,20 @@ module Fluent::Plugin
               x = values ? items[i >> 1] : items[i]
             end
             i += 1
-            # Module#=== works for a BasicObject, which has no is_a?.
-            if (Hash === x || Array === x) && builtin_inspect?(x, :inspect)
+            if Hash === x || Array === x
+              return nil unless plain_container?(x, :inspect)
               v = x
               break
             end
-            s = x.inspect
-            # Like inspect, convert a result that is not a String.
-            unless String === s
-              t = s.to_s
-              s = String === t ? t : KERNEL_TO_S.bind_call(s)
+            # No subclass of these classes, except String, can have an
+            # instance, and none of them can have a singleton method.
+            unless (String === x && KERNEL_CLASS.bind_call(x).equal?(String)) ||
+                   Integer === x || Float === x || Symbol === x ||
+                   nil.equal?(x) || true.equal?(x) || false.equal?(x)
+              return nil
             end
+            s = x.inspect
+            return nil unless s.ascii_only? || s.encoding.equal?(encoding)
             buf << s
           end
           if v
