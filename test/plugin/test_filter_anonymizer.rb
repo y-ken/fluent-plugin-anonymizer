@@ -371,6 +371,18 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     "inspect that adds to the Array" => -> { a = []; a << InspectAppends.new(a); a },
     "String subclass inside" => -> { {"k" => StringWithToS.new("raw")} },
     "Struct holding a Hash" => -> { [StructRef.new({"k" => "v"})] },
+    "inspect undefined, with method_missing" => -> {
+      h = {"k" => "v"}
+      h.singleton_class.send(:undef_method, :inspect)
+      def h.method_missing(*); "MISSING"; end
+      [h]
+    },
+    "to_s undefined, with method_missing" => -> {
+      h = {"k" => "v"}
+      h.singleton_class.send(:undef_method, :to_s)
+      def h.method_missing(*); "MISSING"; end
+      h
+    },
   }
 
   data(NOT_PLAIN_VALUES)

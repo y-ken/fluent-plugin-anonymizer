@@ -150,7 +150,7 @@ On Ruby 3.4 and later, this changes the digest of a non-empty Hash value, and of
 
 A `value_pattern` written for the Ruby 3.4 format, such as `"k" => "v"`, no longer matches these values, so it no longer masks them. Change such a pattern to the format of Ruby 3.3 and earlier, such as `"k"=>"v"`.
 
-Even for a plain value, a character inside a Hash or an Array may be written differently on another Ruby version, so its digest may change. For example, U+1FAE9 is written as `\u{1FAE9}` on Ruby 3.3 and 3.4, and as the character itself on Ruby 4.0.
+Even for a plain value, a character inside a Hash or an Array may be written differently on another Ruby version, so its digest may change. For example, U+1FAE9 is written as `\u{1FAE9}` on Ruby 3.3 and 3.4, and as the character itself on Ruby 4.0. Ruby 4.0 writes many characters as they are, which Ruby 3.3 and 3.4 write as escapes.
 
 * hashing nested value behavior is compatible with [LogStash::Filters::Anonymize](https://github.com/logstash-plugins/logstash-filter-anonymize/blob/master/lib/logstash/filters/anonymize.rb) does. For further details, please check it out the test code at [test_emit_nest_value](https://github.com/y-ken/fluent-plugin-anonymizer/blob/master/test/plugin/test_filter_anonymizer.rb#L231).
 

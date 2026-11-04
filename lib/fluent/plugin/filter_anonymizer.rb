@@ -59,6 +59,8 @@ module Fluent::Plugin
       klass = KERNEL_CLASS.bind_call(v)
       return false unless klass.equal?(Hash) || klass.equal?(Array)
       KERNEL_METHOD.bind_call(v, name).owner.equal?(klass)
+    rescue NameError # the method is undefined for v, which may use method_missing
+      false
     end
     private_class_method :plain_container?
 
