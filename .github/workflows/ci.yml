@@ -10,13 +10,21 @@ permissions:
 
 jobs:
   unit:
-    name: Unit tests (Ruby ${{ matrix.ruby }})
+    name: Unit tests (Ruby ${{ matrix.ruby }}${{ matrix.fluentd && format(', Fluentd {0}', matrix.fluentd) || '' }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        # Fluentd 1.20.1 and later need Ruby 3.3 or later.
         ruby: ['3.3', '3.4', '4.0']
+        # Fluentd 1.20.1 and later need Ruby 3.3 or later, so Ruby 2.7 and 3.2
+        # run on Fluentd 1.16. The Gemfile reads FLUENTD_VERSION.
+        include:
+          - ruby: '2.7'
+            fluentd: '~> 1.16.0'
+          - ruby: '3.2'
+            fluentd: '~> 1.16.0'
+    env:
+      FLUENTD_VERSION: ${{ matrix.fluentd }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ruby/setup-ruby@de492cf36cbab201753d720ce4f4e336cd688c94 # v1.336.0
