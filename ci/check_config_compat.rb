@@ -55,7 +55,8 @@
 # FLUENTD_VERSION sets the requirement of the fluentd gem (default: ">= 0.14.0").
 # The released gem runs on the same version of fluentd as this repository.
 # COMPAT_BUNDLE_PATH sets the directory of the gems (default: tmp/compat-bundle).
-# COMPAT_ONLY runs only the configurations whose path matches it.
+# COMPAT_ONLY runs only the configurations whose path matches it. The check
+# fails if it matches none.
 # COMPAT_VERBOSE=1 shows each allowed change.
 
 require "digest"
@@ -531,10 +532,22 @@ def regenerate_note(file, version)
     "ruby ci/check_config_compat.rb --write-baseline #{file} #{version}"
 end
 
+# The FILE after option, or nil without option.
+def file_option(option)
+  i = ARGV.index(option) or return nil
+  file = ARGV.slice!(i, 2)[1]
+  abort "#{option} needs FILE" if file.nil? || file.start_with?("-")
+  file
+end
+
 fail_on_skip = !ARGV.delete("--fail-on-skip").nil?
-baseline_file = (i = ARGV.index("--baseline")) && ARGV.slice!(i, 2)[1]
-write_file = (i = ARGV.index("--write-baseline")) && ARGV.slice!(i, 2)[1]
+baseline_file = file_option("--baseline")
+write_file = file_option("--write-baseline")
 abort "--write-baseline needs RELEASED_VERSION" if write_file && ARGV[0].nil?
+abort "#{baseline_file} does not exist" if baseline_file && !File.exist?(baseline_file)
+if CONFIGS.empty?
+  abort "COMPAT_ONLY=#{ENV.fetch('COMPAT_ONLY', '')} selects no configuration in test/compat/configs"
+end
 if baseline_file
   baseline_header, baseline = read_baseline(baseline_file)
   stale = stale_baseline(baseline_file, baseline_header, baseline)
