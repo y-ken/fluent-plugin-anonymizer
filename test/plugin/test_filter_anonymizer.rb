@@ -441,6 +441,22 @@ class AnonymizerFilterTest < Test::Unit::TestCase
     assert_equal "192.168.1.1:s", r["f3"]
   end
 
+  # Each expected list is the keys that v1.0.0 masked on Ruby 2.7, whose
+  # ipaddr 1.2.2 matched an IPv4 address and its IPv4-mapped IPv6 address to
+  # each other's network. ipaddr 1.2.3 (Ruby 3.1) and later do not.
+  data("IPv4 network" => ["192.168.0.0/16", %w[v4 mapped upper hex]],
+       "IPv4 address as a network" => ["192.168.1.1", %w[v4 mapped upper hex]],
+       "IPv4-mapped network" => ["::ffff:192.168.0.0/112", %w[v4 mapped upper hex]],
+       "all IPv4-mapped addresses" => ["::ffff:0:0/96", %w[v4 mapped upper hex other_v4 other_mapped]])
+  test 'masker_for_value_in_subnet matches IPv4 and IPv4-mapped addresses as v1.0.0 on Ruby 2.7' do |(network, expected)|
+    conv = ->(v, salt){ "masked" }
+    masker = create_driver.instance.masker_for_value_in_subnet(conv, network, Opts.new(salt: 's'))
+    record = {"v4" => "192.168.1.1", "mapped" => "::ffff:192.168.1.1", "upper" => "::FFFF:192.168.1.1", "hex" => "::ffff:c0a8:101",
+              "compat" => "::192.168.1.1", "v6" => "2001:db8::1", "other_v4" => "10.0.0.1", "other_mapped" => "::ffff:10.0.0.1",
+              "not_ip" => "x", "bad_mapped" => "::ffff:x", "num" => 42, "null" => nil}
+    assert_equal expected, masker.call(record).select { |_, v| v == "masked" }.keys
+  end
+
   test 'filter plugin can mask specified fields' do
     plugin = create_driver(<<-CONF).instance
       <mask md5>
