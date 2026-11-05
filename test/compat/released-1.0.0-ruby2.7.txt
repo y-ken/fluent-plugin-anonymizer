@@ -2102,7 +2102,7 @@
         "192.168.1.10",
         "false",
         "not a Hash",
-        "10.1.2.3�",
+        {"$base64":"MTAuMS4yLjP/","encoding":"UTF-8"},
         "10.9.9.9",
         "192.168.1.1",
         "1.2.3.4, 10.0.0.1"
@@ -7893,7 +7893,15 @@
         "anonymizer: failed to anonymize record. :message=>invalid address: 1.2.3.4, 10.0.0.1 :data=>1.2.3.4, 10.0.0.1"
       ],
       "duplicates": [],
-      "logged": ["10.1.2.3","192.168.1.10","not a Hash","10.1.2.3�","10.9.9.9","192.168.1.1","1.2.3.4, 10.0.0.1"],
+      "logged": [
+        "10.1.2.3",
+        "192.168.1.10",
+        "not a Hash",
+        {"$base64":"MTAuMS4yLjP/","encoding":"UTF-8"},
+        "10.9.9.9",
+        "192.168.1.1",
+        "1.2.3.4, 10.0.0.1"
+      ],
       "outputs": {
         "0": {
           "tag": "anonymized.access",
@@ -8243,7 +8251,7 @@
         "/usr/local/lib/ruby/2.7.0/ipaddr.rb:570:in `split'"
       ],
       "duplicates": [],
-      "logged": ["10.1.2.3","false","10.1.2.3�"],
+      "logged": ["10.1.2.3","false",{"$base64":"MTAuMS4yLjP/","encoding":"UTF-8"}],
       "outputs": {
         "0": {
           "tag": "input.anonymized",
@@ -8933,7 +8941,7 @@
         "/usr/local/lib/ruby/2.7.0/ipaddr.rb:570:in `split'"
       ],
       "duplicates": [],
-      "logged": ["10.1.2.3","10.1.2.3�"],
+      "logged": ["10.1.2.3",{"$base64":"MTAuMS4yLjP/","encoding":"UTF-8"}],
       "outputs": {
         "0": {
           "tag": "anonymized.message",

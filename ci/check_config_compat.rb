@@ -13,8 +13,10 @@
 #   must not become raw, null or another digest.
 # * Each record that the released gem outputs must be output once, with the
 #   same tag.
-# * A String in the records (5 bytes or more) must not be in the log, unless
-#   the released gem logs it too.
+# * A String in the records (5 bytes or more) must not be in the log, as it
+#   is or escaped as inspect writes it, unless the released gem logs it too.
+#   Fluentd is stopped after it emits the records, so the log at shutdown is
+#   checked too.
 #
 # A raw value is the input value, the same bytes in another encoding, or the
 # same address written as IPAddr#to_s writes it.
@@ -106,25 +108,40 @@ def load_records
   TOPLEVEL_BINDING.eval(File.read(RECORDS_FILE, encoding: "UTF-8"), RECORDS_FILE)
 end
 
-# The Strings in value, scrubbed.
+# The Strings in value, as they are.
 def strings_in(value, found = [])
   case value
-  when String then found << value.scrub
+  when String then found << value
   when Hash then value.each_value { |v| strings_in(v, found) }
   when Array then value.each { |v| strings_in(v, found) }
   end
   found
 end
 
-# The Strings of the records that are in the log.
-def logged_strings(records, log)
-  log = log.b
-  strings_in(records).select { |s| s.bytesize >= LOGGED_MIN_BYTES && log.include?(s.b) }.uniq
+# The bytes of a String as they may be in the log: as they are, scrubbed,
+# and escaped as inspect writes them, because Fluentd writes the fields of a
+# log line with inspect. "田中太郎".b is written as \xE7\x94\xB0..., and a
+# String that is not valid UTF-8 is escaped too.
+def log_forms(s)
+  [s, s.scrub, s.inspect[1..-2]].map(&:b).uniq
 end
 
-# Runs Fluentd with config. Returns a Hash:
-#   status: :ok when Fluentd emits all the records, or :error when it exits
-#           or times out before that
+# The Strings of the records that are in the log.
+def logged_strings(records, log)
+  strings_in(records).select { |s| s.bytesize >= LOGGED_MIN_BYTES && log_forms(s).any? { |f| log.include?(f) } }.uniq
+end
+
+def stop(thread)
+  Process.kill(:TERM, thread.pid)
+rescue Errno::ESRCH
+  nil
+end
+
+# Runs Fluentd with config. When Fluentd has emitted all the records, it is
+# stopped, and its output is read to the end, so that a log line written at
+# shutdown is checked too. Returns a Hash:
+#   status: :ok when Fluentd emits all the records and stops, or :error when
+#           it exits before it emits them, or does not stop in TIMEOUT seconds
 #   outputs: {index => [tag, record]}
 #   duplicates: the indexes of the records output more than once
 #   message: why the run failed, for :error
@@ -133,24 +150,25 @@ end
 def run_config(env, dir, config, records, options = [])
   result = { status: :error, outputs: {}, duplicates: [], errors: [] }
   raised = [] # other lines with an exception
-  log = +""
+  emitted = false
+  log = "".b # the log lines as they are, which may have bytes that are not valid UTF-8
   unbundled do
     Open3.popen2e(env, "bundle", "exec", "fluentd", "-c", config, "-p", PLUGIN_DIR, "--no-supervisor", *options, chdir: dir) do |stdin, out, thread|
       stdin.close
       begin
         Timeout.timeout(TIMEOUT) do
-          out.each_line do |line|
-            line = line.scrub # a log line may have a value that is not valid UTF-8
+          out.each_line do |raw_line|
+            line = raw_line.scrub # to match a log line that may have a value that is not valid UTF-8
             if line.start_with?("COMPAT-RECORD ")
               _, index, data = line.split(" ", 3)
               index = Integer(index)
               result[:duplicates] << index if result[:outputs].key?(index)
               result[:outputs][index] = Marshal.load(data.strip.unpack1("m0"))
             elsif line.start_with?("COMPAT-EMITTED ")
-              result[:status] = :ok
-              break
+              emitted = true
+              stop(thread)
             else
-              log << line
+              log << raw_line.b
               if line =~ /\[error\]: (.*)/
                 message = $1.strip
                 # "config error in:" is followed by the configuration and then by the error.
@@ -162,9 +180,18 @@ def run_config(env, dir, config, records, options = [])
             end
           end
         end
-        result[:message] = result[:errors].first || raised.first || "Fluentd exited before it emitted the records" if result[:status] == :error
+        if emitted
+          result[:status] = :ok
+        else
+          result[:message] = result[:errors].first || raised.first || "Fluentd exited before it emitted the records"
+        end
       rescue Timeout::Error
-        result[:message] = result[:errors].first || raised.first || "the records were not emitted in #{TIMEOUT} seconds"
+        result[:message] =
+          if emitted
+            "Fluentd did not stop in #{TIMEOUT} seconds after it emitted the records"
+          else
+            result[:errors].first || raised.first || "the records were not emitted in #{TIMEOUT} seconds"
+          end
       ensure
         begin
           Process.kill(:TERM, thread.pid)
