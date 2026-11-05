@@ -57,7 +57,6 @@ require "open3"
 require "rubygems"
 require "timeout"
 require "tmpdir"
-require "zlib"
 
 ROOT = File.expand_path("..", __dir__)
 CONFIGS = Dir[File.join(ROOT, "test/compat/configs/*.conf")].sort.grep(Regexp.new(ENV.fetch("COMPAT_ONLY", "")))
@@ -283,41 +282,140 @@ def compare_results(records, before, after)
 end
 
 # A baseline keeps the result of the released gem for each configuration, in
-# a line "<name> <digest of the configuration> <result>" after the header
-# lines that start with "#". The result is in Marshal, deflated, in Base64.
+# JSON, so that a review can read what the released gem output, and what a
+# new baseline changes. It has the version of the gem, Ruby and Fluentd, the
+# digest of test/compat/records.rb, and for each configuration its digest and
+# the result of run_config. Each output record is {"tag": TAG, "record":
+# RECORD}, at the index of the record. JSON has no encoding of a String, and
+# no key that is not a String, so the values are written as follows:
+#
+# * A String in UTF-8 that is valid is a JSON String.
+# * Another String is {"$string": TEXT, "encoding": ENCODING} if its bytes
+#   are valid UTF-8, or {"$base64": BASE64, "encoding": ENCODING} if not.
+# * A Hash whose keys are all Strings of the first kind, none of which starts
+#   with "$", is a JSON object. Another Hash is {"$hash": [[KEY, VALUE], ...]}.
+# * A Float that is not finite is {"$float": "NaN"}, "Infinity" or "-Infinity".
 BASELINE_KEYS = [:status, :outputs, :duplicates, :message, :errors, :logged]
 
 def digest_of(path)
   Digest::SHA256.file(path).hexdigest[0, 16]
 end
 
-def write_baseline(file, released, fluentd, results)
-  lines = [
-    "# The output of fluent-plugin-anonymizer #{released} for each configuration in test/compat/configs.",
-    "# Written by: ruby ci/check_config_compat.rb --write-baseline #{file} #{released}",
-    "# version #{released}",
-    "# ruby #{RUBY_VERSION}",
-    "# fluentd #{fluentd}",
-    "# records #{digest_of(RECORDS_FILE)}",
-  ]
-  results.each do |config, result|
-    data = [Zlib::Deflate.deflate(Marshal.dump(BASELINE_KEYS.map { |k| result[k] }))].pack("m0")
-    lines << "#{File.basename(config)} #{digest_of(config)} #{data}"
+def plain_string?(v)
+  v.is_a?(String) && v.encoding == Encoding::UTF_8 && v.valid_encoding?
+end
+
+def to_baseline_value(v)
+  case v
+  when String
+    return v if plain_string?(v)
+    text = v.dup.force_encoding(Encoding::UTF_8)
+    if text.valid_encoding?
+      { "$string" => text, "encoding" => v.encoding.name }
+    else
+      { "$base64" => [v].pack("m0"), "encoding" => v.encoding.name }
+    end
+  when Hash
+    if v.keys.all? { |k| plain_string?(k) && !k.start_with?("$") }
+      v.each_with_object({}) { |(k, x), h| h[k] = to_baseline_value(x) }
+    else
+      { "$hash" => v.map { |k, x| [to_baseline_value(k), to_baseline_value(x)] } }
+    end
+  when Array then v.map { |x| to_baseline_value(x) }
+  when Float then v.finite? ? v : { "$float" => v.to_s }
+  when Integer, true, false, nil then v
+  else raise ArgumentError, "a baseline cannot keep #{v.class}: #{v.inspect[0, 80]}"
   end
-  File.write(file, lines.join("\n") + "\n")
+end
+
+def from_baseline_value(v)
+  case v
+  when Hash
+    if v.key?("$string") then v["$string"].b.force_encoding(v["encoding"])
+    elsif v.key?("$base64") then v["$base64"].unpack1("m0").force_encoding(v["encoding"])
+    elsif v.key?("$hash") then v["$hash"].each_with_object({}) { |(k, x), h| h[from_baseline_value(k)] = from_baseline_value(x) }
+    elsif v.key?("$float") then { "NaN" => Float::NAN, "Infinity" => Float::INFINITY, "-Infinity" => -Float::INFINITY }.fetch(v["$float"])
+    else v.each_with_object({}) { |(k, x), h| h[k] = from_baseline_value(x) }
+    end
+  when Array then v.map { |x| from_baseline_value(x) }
+  else v
+  end
+end
+
+# A value in a baseline that is written on one line: a value that is not an
+# Array or a Hash, a String or a Float written as a Hash, and an Array of them.
+def one_line?(v)
+  case v
+  when Hash then (v.key?("$string") || v.key?("$base64") || v.key?("$float"))
+  when Array then v.all? { |x| !x.is_a?(Array) && one_line?(x) } && v.to_json.size <= 100
+  else true
+  end
+end
+
+# JSON with each value of a Hash or an Array on its own line, except the
+# values of one_line?, so that a diff shows each value that changed.
+def baseline_json(v, indent = "")
+  return v.to_json if one_line?(v)
+  inner = indent + "  "
+  if v.is_a?(Hash)
+    return "{}" if v.empty?
+    "{\n" + v.map { |k, x| "#{inner}#{k.to_json}: #{baseline_json(x, inner)}" }.join(",\n") + "\n#{indent}}"
+  else
+    "[\n" + v.map { |x| "#{inner}#{baseline_json(x, inner)}" }.join(",\n") + "\n#{indent}]"
+  end
+end
+
+# A String of the baseline itself, such as a digest, in UTF-8.
+def utf8(s)
+  s.to_s.encode(Encoding::UTF_8)
+end
+
+def baseline_result(result)
+  {
+    "status" => utf8(result[:status]),
+    "message" => result[:message],
+    "errors" => result[:errors],
+    "duplicates" => result[:duplicates],
+    "logged" => result[:logged],
+    "outputs" => result[:outputs].sort.each_with_object({}) { |(i, (tag, record)), h| h[utf8(i)] = { "tag" => tag, "record" => record } },
+  }
+end
+
+def write_baseline(file, released, fluentd, results)
+  data = {
+    "comment" => "The output of fluent-plugin-anonymizer #{released} for each configuration in test/compat/configs. " \
+                 "Written by: ruby ci/check_config_compat.rb --write-baseline #{file} #{released}",
+    "version" => utf8(released),
+    "ruby" => utf8(RUBY_VERSION),
+    "fluentd" => utf8(fluentd),
+    "records" => utf8(digest_of(RECORDS_FILE)),
+    "configs" => results.each_with_object({}) do |(config, result), h|
+      h[utf8(File.basename(config))] = { "digest" => utf8(digest_of(config)) }.merge(baseline_result(result))
+    end,
+  }
+  File.write(file, baseline_json(to_baseline_value(data)) + "\n")
+  # The baseline must keep each value as it is, with the encoding of each String.
+  _, kept = read_baseline(file)
+  results.each do |config, result|
+    k = kept[File.basename(config)][1]
+    next if BASELINE_KEYS.all? { |key| same?(k[key], key == :outputs ? result[key].sort.to_h : result[key]) }
+    abort "#{file} does not keep the result of #{File.basename(config)} as it is"
+  end
 end
 
 def read_baseline(file)
-  header = {}
-  results = {}
-  File.foreach(file) do |line|
-    if line.start_with?("# ")
-      key, value = line[2..-1].strip.split(" ", 2)
-      header[key] = value
-    else
-      name, digest, data = line.split(" ", 3)
-      results[name] = [digest, BASELINE_KEYS.zip(Marshal.load(Zlib::Inflate.inflate(data.strip.unpack1("m0")))).to_h]
-    end
+  data = from_baseline_value(JSON.parse(File.read(file, encoding: "UTF-8")))
+  header = data.reject { |k, _| k == "configs" }
+  results = data.fetch("configs").each_with_object({}) do |(name, r), h|
+    result = {
+      status: r.fetch("status").to_sym,
+      outputs: r.fetch("outputs").each_with_object({}) { |(i, o), out| out[Integer(i)] = [o.fetch("tag"), o.fetch("record")] },
+      duplicates: r.fetch("duplicates"),
+      message: r.fetch("message"),
+      errors: r.fetch("errors"),
+      logged: r.fetch("logged"),
+    }
+    h[name] = [r.fetch("digest"), result]
   end
   [header, results]
 end
@@ -395,7 +493,7 @@ Dir.mktmpdir do |tmp|
       if baseline_file
         kept = baseline[name][1]
         unless kept[:status] == before[:status] &&
-               (before[:status] == :error || (same?(kept[:outputs], before[:outputs]) && kept[:logged] == before[:logged]))
+               (before[:status] == :error || (same?(kept[:outputs], before[:outputs].sort.to_h) && kept[:logged] == before[:logged]))
           stale << name
           puts "#{name}: the baseline is not the output of #{released}"
         end
