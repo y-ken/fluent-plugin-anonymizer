@@ -201,7 +201,7 @@ It needs one or more of the following parameters, which change the tag in this o
 
 If the new tag matches the same `<match>`, the event is emitted again and again. Use a pattern that does not match the new tag.
 
-Where v1.0.0 raised an error and emitted no event, the event is emitted now: a nested key through a value that is not a Hash is left as it is, and `${tag_parts[N]}` out of the tag becomes an empty string with a warning. An Array of IP addresses is masked for each element, and an element that is not an IP address is left as it is, while v1.0.0 left the whole Array.
+Where v1.0.0 raised an error and emitted no event, the event is emitted now: a nested key through a value that is not a Hash is left as it is, and `${tag_parts[N]}` out of the tag becomes an empty string, with a warning once for each input tag. An Array of IP addresses is masked for each element, and an element that is not an IP address is left as it is, while v1.0.0 left the whole Array.
 
 ## Notes
 

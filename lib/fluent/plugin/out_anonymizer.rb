@@ -74,14 +74,21 @@ module Fluent::Plugin
       @remove_tag_prefix_regexp = Regexp.new('^' + Regexp.escape(@remove_tag_prefix)) if @remove_tag_prefix
       @remove_tag_suffix_regexp = Regexp.new(Regexp.escape(@remove_tag_suffix) + '$') if @remove_tag_suffix
       @hostname = Socket.gethostname
+      @new_tags = {}
+      @new_tags_mutex = Mutex.new
     end
 
     def multi_workers_ready?
       true
     end
 
+    # The number of input tags whose new tag is kept. The new tags are
+    # forgotten when there are more, so a tag with a random part does not
+    # use up the memory.
+    NEW_TAGS_LIMIT = 1024
+
     def process(tag, es)
-      new_tag = rewrite_tag(tag)
+      new_tag = new_tag_for(tag)
       new_es = Fluent::MultiEventStream.new
       es.each do |time, record|
         @masks.each do |path, conv|
@@ -109,6 +116,17 @@ module Fluent::Plugin
     end
 
     private
+
+    # The new tag for an input tag, kept for each input tag, so that a
+    # warning about the tag is logged once for each input tag.
+    def new_tag_for(tag)
+      @new_tags_mutex.synchronize do
+        @new_tags.fetch(tag) do
+          @new_tags.clear if @new_tags.size >= NEW_TAGS_LIMIT
+          @new_tags[tag] = rewrite_tag(tag).freeze
+        end
+      end
+    end
 
     def expand_placeholders(str, tag)
       str = str.gsub(TAG_PLACEHOLDER) do |placeholder|
