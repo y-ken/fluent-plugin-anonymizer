@@ -160,13 +160,15 @@ Fluentd warns for each of them when it starts (in each process), not for each re
 | `ipaddr_mask_keys host`<br>`ipv4_mask_subnet 24`<br>`ipv6_mask_subnet 104` | `<mask network>`<br>`  keys host`<br>`  ipv4_mask_bits 24`<br>`  ipv6_mask_bits 104`<br>`  mask_array_elements true`<br>`</mask>` |
 | `ipaddr_mask_keys host` without `ipv4_mask_subnet` and `ipv6_mask_subnet` | `ipv4_mask_bits 24` and `ipv6_mask_bits 104`, which are the defaults of v1.0.0. Without them, `<mask network>` does not round the address. |
 | `key user_id` in `<mask>` | `keys user_id` |
+| `key $.a.b` in `<mask>` (a key that starts with `$.` or `$[`) | `keys $['$.a.b']`, because `keys $.a.b` is a nested key. Fluentd warns about it when it starts. |
 | `key_chain user.name`, `key_chains user.name, user.id` in `<mask>` | `keys $.user.name, $.user.id`. If a key has a space or a bracket, use `$['user']['first name']`. |
 
 Notes on rewriting:
 
 * The parameters of v1.0.0 mask after all `<mask>` sections, in the order of `md5_keys`, `sha1_keys`, `sha256_keys`, `sha384_keys`, `sha512_keys` and `ipaddr_mask_keys`. Put the new `<mask>` sections after the others in this order, to get the same output.
 * `hash_salt` is used only for the parameters of v1.0.0, and `salt` and `salts` only for `<mask>`.
-* Write `salt` in each `<mask>` with a hash method, or `salt` at the top level. Without them, the values are not masked and an error is logged for each record. For no salt, as without `hash_salt`, write `salt ""`.
+* Write `salt` in each `<mask>` with a hash method, or `salt` at the top level. For no salt, as without `hash_salt`, write `salt ""`.
+* Known issue (planned to be fixed in 1.1.2): a `<mask>` with a hash method and no `salt`, either in the `<mask>` or at the top level, outputs the values as they are, not masked, and logs an error for each record, as v1.0.0 does. With `salts` but without `salt`, this happens to some keys too.
 * A key of `md5_keys` and the others with a dot is a nested key. A key of `keys` with a dot is a top-level key, so write a nested key as `$.a.b`.
 
 ## Notes

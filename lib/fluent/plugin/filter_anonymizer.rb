@@ -246,7 +246,13 @@ module Fluent::Plugin
 
         conv = MASK_METHODS[c.method].call(c)
         # key of v1.0.0 is a top-level key, even if it starts with $.
-        @masks << masker_for_key(conv, c.key, c) if c.key
+        if c.key
+          @masks << masker_for_key(conv, c.key, c)
+          if c.key.start_with?('$.', '$[')
+            log.warn "key #{c.key} is the top-level key #{c.key.inspect}. Write it as keys $['#{c.key}'] in <mask>, " \
+                     "because keys reads #{c.key} as a nested key."
+          end
+        end
         # null in keys is skipped, as in v1.0.0.
         keys = c.keys.compact
         paths = keys.each_with_index.map { |key, i| key_path(key, keys[(i + 1)..-1], c) }
