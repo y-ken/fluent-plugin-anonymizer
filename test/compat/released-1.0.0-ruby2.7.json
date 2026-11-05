@@ -1,5 +1,5 @@
 {
-  "comment": "The output of fluent-plugin-anonymizer 1.0.0 for each configuration in test/compat/configs. Written by: ruby ci/check_config_compat.rb --write-baseline test/compat/released-1.0.0-ruby2.7.txt 1.0.0",
+  "comment": "The output of fluent-plugin-anonymizer 1.0.0 for each configuration in test/compat/configs. Written by: ruby ci/check_config_compat.rb --write-baseline test/compat/released-1.0.0-ruby2.7.json 1.0.0",
   "version": "1.0.0",
   "ruby": "2.7.8",
   "fluentd": "1.16.11",
