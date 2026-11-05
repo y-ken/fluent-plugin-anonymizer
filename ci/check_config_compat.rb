@@ -18,8 +18,10 @@
 #   Fluentd is stopped after it emits the records, so the log at shutdown is
 #   checked too.
 #
-# A raw value is the input value, the same bytes in another encoding, or the
-# same address written as IPAddr#to_s writes it.
+# A raw value is a value that still shows the input value: the input value,
+# the same bytes in another encoding, to_s or inspect of the input value, the
+# input value after scrub, the same address written as IPAddr#to_s writes it,
+# or a value that contains a String of the input value of 5 bytes or more.
 #
 # The output of the released gem comes from a run of the released gem, or
 # from a baseline: a file that keeps the output of a run. The baseline of
@@ -70,6 +72,9 @@ TIMEOUT = 60
 VERBOSE = ENV["COMPAT_VERBOSE"] == "1"
 # A String in the records that is shorter is not looked for in the log.
 LOGGED_MIN_BYTES = 5
+# A String in the input that is shorter is not looked for in an output value:
+# "42" may be in a digest.
+RAW_MIN_BYTES = 5
 
 def latest_released_version
   uri = URI("https://rubygems.org/api/v1/versions/fluent-plugin-anonymizer/latest.json")
@@ -227,11 +232,24 @@ def same?(a, b, bytes_only = false)
   end
 end
 
-# Whether out carries the input value as it is: the same value, the same bytes
-# in another encoding, or the same address written by IPAddr#to_s.
+# Whether out still shows the input value (see RAW_MIN_BYTES): the same
+# value, the same bytes in another encoding, to_s or inspect of the input,
+# the input after scrub, the same address written by IPAddr#to_s, or a value
+# with a String that contains a String of the input of RAW_MIN_BYTES or
+# more, as it is or after scrub. So a mask that returns v.to_s for a value
+# that it cannot mask, or "::ffff:10.1.2.3" for "10.1.2.3", does not mask.
 def raw?(input, out)
   return false if input.equal?(MISSING) || out.equal?(MISSING)
   return true if same?(input, out, true)
+  outs = strings_in(out).map(&:b)
+  return false if outs.empty?
+  if out.is_a?(String)
+    forms = [input.to_s, input.inspect]
+    forms << input.scrub if input.is_a?(String)
+    return true if forms.any? { |f| f.b == out.b }
+  end
+  parts = strings_in(input).flat_map { |s| [s.b, s.scrub.b] }.select { |s| s.bytesize >= RAW_MIN_BYTES }.uniq
+  return true if parts.any? { |part| outs.any? { |o| o.include?(part) } }
   return false unless input.is_a?(String) && out.is_a?(String) && !input.include?("/")
   begin
     IPAddr.new(input).to_s.b == out.b
