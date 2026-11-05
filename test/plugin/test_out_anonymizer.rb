@@ -172,6 +172,20 @@ class AnonymizerOutputTest < Test::Unit::TestCase
       assert_equal ["x."], d.events.map(&:first)
       assert_equal 1, d.logs.grep(/\[warn\]: .*tag_parts\[5\]/).size, d.logs.inspect
     end
+
+    test "a part of the tag that does not exist warns once for each tag, not for each event stream" do
+      d = create_driver("sha1_keys user_id\ntag x.${tag_parts[5]}")
+      d.run(default_tag: 'input.access') do
+        5.times { d.feed(@time, {"user_id" => "alice"}) }
+        d.feed([[@time, {"user_id" => "bob"}], [@time, {"user_id" => "carol"}]])
+        d.feed("input.other", @time, {"user_id" => "dave"})
+      end
+      assert_equal ["x."] * 8, d.events.map(&:first)
+      warnings = d.logs.grep(/\[warn\]: .*tag_parts\[5\]/)
+      assert_equal 2, warnings.size, d.logs.inspect
+      assert_equal 1, warnings.grep(/'input\.access'/).size
+      assert_equal 1, warnings.grep(/'input\.other'/).size
+    end
   end
 
   # v1.0.0 left the whole Array as it was when an element is not an IP address.
