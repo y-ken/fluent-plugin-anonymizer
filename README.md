@@ -8,7 +8,7 @@ Fluentd filter plugin to anonymize records with [OpenSSL::Digest](https://docs.r
 
 | fluent-plugin-anonymizer | fluentd    | ruby   |
 |--------------------|------------|--------|
-|  1.1.0            | v0.14.x | >= 2.7 |
+|  1.1.0            | >= v0.14.20, < 2 | >= 2.7 |
 |  1.0.0            | v0.14.x | >= 2.1 |
 |  0.5.1            | v0.12.x | >= 1.9 |
 
