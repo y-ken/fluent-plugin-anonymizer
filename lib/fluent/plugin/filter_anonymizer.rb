@@ -185,11 +185,13 @@ module Fluent::Plugin
 
     NESTED_KEY_NOTE = "Write a nested key such as a.b as $.a.b in keys."
 
-    config_param :salt, :string, default: nil
-    config_param :salts, :array, default: nil
+    # The salts are secret, so that Fluentd does not write them in the
+    # configuration that it logs.
+    config_param :salt, :string, default: nil, secret: true
+    config_param :salts, :array, default: nil, secret: true
     config_section :mask, param_name: :mask_config_list, required: false, multi: true do
       config_argument :method, :enum, list: MASK_METHODS.keys
-      config_param :salt, :string, default: nil
+      config_param :salt, :string, default: nil, secret: true
 
       config_param :key,             :string, default: nil,
                    deprecated: "Use keys in <mask> instead."
@@ -214,7 +216,7 @@ module Fluent::Plugin
       config_param :"#{m}_keys", :string, default: nil,
                    deprecated: "Use <mask #{m}> with keys, salt and mask_array_elements true instead. #{NESTED_KEY_NOTE}"
     end
-    config_param :hash_salt,   :string, default: nil,
+    config_param :hash_salt,   :string, default: nil, secret: true,
                  deprecated: "Use salt in <mask> instead."
     config_param :ipaddr_mask_keys, :string, default: nil,
                  deprecated: "Use <mask network> with keys, ipv4_mask_bits, ipv6_mask_bits and mask_array_elements true instead. #{NESTED_KEY_NOTE}"

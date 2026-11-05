@@ -130,6 +130,7 @@ An IPv4 address and its IPv4-mapped IPv6 address, such as `192.168.1.1` and `::f
 
 This salt affects for `keys` settings.
 It is recommend to set a hash salt to prevent rainbow table attacks.
+Fluentd writes `xxxxxx` in place of the salt in the configuration that it logs at startup.
 
 * `mask_array_elements` (default: false)
 
