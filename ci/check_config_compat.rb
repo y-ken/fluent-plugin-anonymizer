@@ -44,6 +44,14 @@
 #   ruby ci/check_config_compat.rb --write-baseline FILE RELEASED_VERSION
 #     Writes the output of RELEASED_VERSION to FILE.
 #
+# On Ruby 3.4 and later, a run of v1.0.0 can report a Hash value, or an
+# Array that holds a Hash, as broken ("masked -> another value"), and
+# --baseline FILE 1.0.0 also says that FILE is not the output of 1.0.0.
+# v1.0.0 hashes such a value in the format of Hash#inspect of the running
+# Ruby, which changed in Ruby 3.4, while this repository hashes it in the
+# format of Ruby 3.3 (#37). Use --baseline FILE without a version there, to
+# compare with the output of v1.0.0 on Ruby 2.7.
+#
 # A broken configuration fails the check, unless the major version in the
 # gemspec is greater than the major version of the released gem. Then it is
 # only reported, because a new major version may break configurations.
