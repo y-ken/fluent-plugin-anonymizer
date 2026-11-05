@@ -13,6 +13,11 @@
 #   must not become raw, null or another digest.
 # * Each record that the released gem outputs must be output once, with the
 #   same tag.
+# * A record that the released gem does not output may be output. A value in
+#   it must not be raw at a key where the released gem masked the value with
+#   a hash method in another record, because a hash method masks any value.
+#   An address in it must not be raw at a key where the released gem masked
+#   an address (a network mask leaves a value that is not an address).
 # * A String in the records (5 bytes or more) must not be in the log, as it
 #   is or escaped as inspect writes it, unless the released gem logs it too.
 #   Fluentd is stopped after it emits the records, so the log at shutdown is
@@ -306,6 +311,43 @@ def compare(input, before, after, path, problems, changes)
   end
 end
 
+def address?(value)
+  value.is_a?(String) && !!IPAddr.new(value)
+rescue StandardError
+  false
+end
+
+# Adds to found how the released gem masked the value at each path of a
+# record that it output: :hash where it output a digest, and :network where
+# it output another address. An index of an Array is [] in a path.
+def masked_paths(input, out, found, path = [])
+  if out.is_a?(Hash) && input.is_a?(Hash)
+    out.each { |k, v| masked_paths(input.key?(k) ? input[k] : MISSING, v, found, path + [k]) }
+  elsif out.is_a?(Array) && input.is_a?(Array) && out.size == input.size
+    out.each_with_index { |v, i| masked_paths(input[i], v, found, path + [[]]) }
+  elsif !input.equal?(MISSING) && out.is_a?(String) && !raw?(input, out)
+    kind = if out.match?(/\A\h{32,}\z/) then :hash
+           elsif address?(out) then :network
+           end
+    found[path] = (found[path] || []) | [kind] if kind
+  end
+end
+
+# Adds a problem for each value of a record that the released gem did not
+# output that is raw where the released gem masked such a value (see the
+# top of this file). An empty Array or Hash shows nothing, so it may be raw.
+def check_new_record(input, out, masked, path, where, problems)
+  kinds = masked[path] || []
+  if (kinds.include?(:hash) || (kinds.include?(:network) && address?(input))) &&
+     !(input.respond_to?(:empty?) && !input.is_a?(String) && input.empty?) && raw?(input, out)
+    problems << "#{where.map(&:inspect).join(' ')}: raw where the released gem masked the value in another record (#{short(out)})"
+  elsif out.is_a?(Hash) && input.is_a?(Hash)
+    out.each { |k, v| check_new_record(input[k], v, masked, path + [k], where + [k], problems) if input.key?(k) }
+  elsif out.is_a?(Array) && input.is_a?(Array) && out.size == input.size
+    out.each_with_index { |v, i| check_new_record(input[i], v, masked, path + [[]], where + [i], problems) }
+  end
+end
+
 # Returns [problems, changes] for the results of the two runs.
 def compare_results(records, before, after)
   problems = []
@@ -321,7 +363,15 @@ def compare_results(records, before, after)
     problems << "record #{i}: the tag #{btag.inspect} became #{atag.inspect}" unless btag == atag
     compare(records[i], brecord, arecord, ["record #{i}"], problems, changes)
   end
-  (after[:outputs].keys - before[:outputs].keys).each { changes["record not output before -> output"] += 1 }
+  new_records = (after[:outputs].keys - before[:outputs].keys).sort
+  unless new_records.empty?
+    masked = {}
+    before[:outputs].each { |i, (_, record)| masked_paths(records[i], record, masked) }
+    new_records.each do |i|
+      changes["record not output before -> output"] += 1
+      check_new_record(records[i], after[:outputs][i][1], masked, [], ["record #{i}"], problems)
+    end
+  end
   (after[:logged] - before[:logged]).each { |s| problems << "a String of the records is in the log: #{short(s[0, 30])}" }
   [problems, changes]
 end
