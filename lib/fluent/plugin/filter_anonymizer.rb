@@ -250,13 +250,9 @@ EOF
         end
 
         conv = MASK_METHODS[c.method].call(c)
-        c.keys.each do |key|
-          path = key_path(key)
-          if path.is_a?(Array)
-            @masks << masker_for_key_chain(conv, path, c)
-          else
-            @masks << masker_for_key(conv, path, c)
-          end
+        # null in keys is skipped, as in v1.0.0.
+        c.keys.compact.each do |key|
+          @masks << masker_for_key_chain(conv, key_path(key), c)
         end
         @masks << masker_for_key_pattern(conv, c.key_pattern, c) if c.key_pattern
         @masks << masker_for_value_pattern(conv, c.value_pattern, c) if c.value_pattern
@@ -275,15 +271,23 @@ EOF
       record.update(@masks.reduce(record){|r,mask| mask.call(r)})
     end
 
-    # Returns the key for a key in keys: an Array of keys for a key in the
-    # syntax of record_accessor ($.a.b or $['a']['b']), or the key itself for
-    # any other key, even if it has a dot or is not a String, as in v1.0.0.
+    # Returns the path of a key in keys, an Array of keys: the keys of a key
+    # in the syntax of record_accessor ($.a.b or $['a']['b']), or the key
+    # itself for any other key, even if it has a dot or is not a String, as
+    # in v1.0.0. A key that starts with $. or $[ but is not in the syntax of
+    # record_accessor is a top-level key too, as in v1.0.0.
     def key_path(key)
       if key.is_a?(String) && key.start_with?('$.', '$[')
-        Fluent::PluginHelper::RecordAccessor::Accessor.parse_parameter(key)
-      else
-        key
+        begin
+          path = Fluent::PluginHelper::RecordAccessor::Accessor.parse_parameter(key)
+          return path.is_a?(Array) ? path : [path]
+        rescue StandardError => e
+          log.warn "#{key.inspect} in keys is not in the syntax of record_accessor (#{e.class}: #{e.message}), " \
+                   "so it is the top-level key #{key.inspect}, as in v1.0.0. " \
+                   "For a nested key, write each key in brackets, such as $['user']['first name']."
+        end
       end
+      [key]
     end
 
     # Replaces the value at path in record with the value of the block, if
@@ -291,12 +295,15 @@ EOF
     # Array of keys of Hashes and indexes of Arrays.
     def self.update_path(record, path)
       container = record
-      path[0..-2].each do |key|
+      last = path.size - 1
+      path.each_with_index do |key, i|
         return unless child?(container, key)
-        container = container[key]
+        if i == last
+          container[key] = yield(container[key])
+        else
+          container = container[key]
+        end
       end
-      key = path[-1]
-      container[key] = yield(container[key]) if child?(container, key)
     end
 
     def self.child?(container, key)
