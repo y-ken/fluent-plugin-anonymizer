@@ -663,5 +663,32 @@ CONF
       assert_equal [{"a" => {"n" => sha1.(""), "b" => "x"}, "list" => ["x", sha1.("y")]}], d.filtered_records
       assert_equal [], d.logs.grep(/\[error\]/)
     end
+
+    # v1.0.0 did not know record_accessor, so these keys were top-level keys
+    # there, and Fluentd started.
+    data("a space" => "$.user name", "an open bracket" => "$[foo", "a bracket without quotes" => "$.a[x]")
+    test "keys that record_accessor cannot read is a top-level key, as v1.0.0" do |key|
+      d = create_driver("<mask sha1>\n  keys #{key}\n  salt s\n</mask>")
+      d.run(default_tag: 'test') { d.feed(@time, {key => "alice", "user" => {"name" => "bob"}}) }
+      sha1 = OpenSSL::Digest.new("sha1").update("s").update("alice").hexdigest
+      assert_equal [{key => sha1, "user" => {"name" => "bob"}}], d.filtered_records
+      warnings = d.logs.grep(/\[warn\]: .*is not in the syntax of record_accessor/)
+      assert_equal 1, warnings.size, d.logs.join
+      assert_include warnings.first, "the top-level key #{key.inspect}"
+    end
+
+    test "keys skips null, as v1.0.0" do
+      d = create_driver("<mask sha1>\n  keys [null, \"a\"]\n  salt s\n</mask>")
+      d.run(default_tag: 'test') { d.feed(@time, {nil => "x", "a" => "alice"}) }
+      sha1 = OpenSSL::Digest.new("sha1").update("s").update("alice").hexdigest
+      assert_equal [{nil => "x", "a" => sha1}], d.filtered_records
+    end
+
+    test "keys with an Array is the top-level key of the Array, as v1.0.0" do
+      d = create_driver("<mask sha1>\n  keys [[\"user\", \"name\"]]\n  salt s\n</mask>")
+      d.run(default_tag: 'test') { d.feed(@time, {["user", "name"] => "alice", "user" => {"name" => "bob"}}) }
+      sha1 = OpenSSL::Digest.new("sha1").update("s").update("alice").hexdigest
+      assert_equal [{["user", "name"] => sha1, "user" => {"name" => "bob"}}], d.filtered_records
+    end
   end
 end
