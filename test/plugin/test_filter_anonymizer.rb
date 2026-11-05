@@ -721,7 +721,12 @@ CONF
       d = create_driver("ipaddr_mask_keys host, host6")
       d.run(default_tag: 'test') { d.feed(@time, {"host" => "10.102.3.80", "host6" => "2001:db8:0:8d3:0:8a2e:70:7344"}) }
       assert_equal [{"host" => "10.102.3.0", "host6" => "2001:db8:0:8d3:0:8a2e::"}], d.filtered_records
-      assert_equal [], d.logs.grep(/deprecated: .*mask_subnet/)
+      assert_equal [], d.logs.grep(/'ipv[46]_mask_subnet' parameter is deprecated/)
+    end
+
+    test "ipv4_mask_subnet and ipv6_mask_subnet warn when they are written" do
+      d = create_driver("ipaddr_mask_keys host\nipv4_mask_subnet 24\nipv6_mask_subnet 104")
+      assert_equal 2, d.logs.grep(/'ipv[46]_mask_subnet' parameter is deprecated/).size, d.logs.join
     end
 
     test "hash_salt alone configures nothing, as v1.0.0" do
@@ -757,6 +762,18 @@ CONF
       d = create_driver("<mask sha1>\n  key $.a\n  salt s\n</mask>")
       d.run(default_tag: 'test') { d.feed(@time, {"$.a" => "alice", "a" => "bob"}) }
       assert_equal [{"$.a" => OpenSSL::Digest.new("sha1").update("s").update("alice").hexdigest, "a" => "bob"}], d.filtered_records
+    end
+
+    test "key that starts with $ warns how to write it in keys" do
+      d = create_driver("<mask sha1>\n  key $.a.b\n  salt s\n</mask>")
+      warnings = d.logs.grep(/\[warn\]: .*keys \$\['\$\.a\.b'\]/)
+      assert_equal 1, warnings.size, d.logs.join
+    end
+
+    test "keys $['$.a.b'] is the top-level key $.a.b, as the warning for key says" do
+      d = create_driver("<mask sha1>\n  keys $['$.a.b']\n  salt s\n</mask>")
+      d.run(default_tag: 'test') { d.feed(@time, {"$.a.b" => "alice", "a" => {"b" => "bob"}}) }
+      assert_equal [{"$.a.b" => OpenSSL::Digest.new("sha1").update("s").update("alice").hexdigest, "a" => {"b" => "bob"}}], d.filtered_records
     end
 
     test "keys with a value that is not a String starts, as v1.0.0" do
