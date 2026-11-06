@@ -753,6 +753,12 @@ CONF
       assert_equal [], d.logs.grep(/\[warn\]/)
     end
 
+    data("key_chain" => "key_chain a.b", "key_chains" => "key_chains a.b")
+    test "key_chain and key_chains point to keys with $." do |param|
+      e = assert_raise(Fluent::ObsoletedParameterError) { create_driver("<mask sha1>\n  #{param}\n  salt s\n</mask>") }
+      assert_include e.message, "Use keys parameter instead, with $. for a nested key, such as $.user.name."
+    end
+
     test "keys skips null, as v1.0.0" do
       d = create_driver("<mask sha1>\n  keys [null, \"a\"]\n  salt s\n</mask>")
       d.run(default_tag: 'test') { d.feed(@time, {nil => "x", "a" => "alice"}) }

@@ -196,9 +196,9 @@ EOF
                    obsoleted: "Use keys parameter instead."
       config_param :keys,            :array,  default: []
       config_param :key_chain,       :string, default: nil, # for.nested.key
-                   obsoleted: "Use keys parameter instead."
+                   obsoleted: "Use keys parameter instead, with $. for a nested key, such as $.user.name."
       config_param :key_chains,      :array,  default: [],  # ["for.nested.key","can.be.specified","twice.or.more"]
-                   obsoleted: "Use keys parameter instead."
+                   obsoleted: "Use keys parameter instead, with $. for a nested key, such as $.user.name."
       config_param :key_pattern,     :string, default: nil
       config_param :value_pattern,   :string, default: nil
       config_param :value_in_subnet, :string, default: nil # 192.168.0.0/24
