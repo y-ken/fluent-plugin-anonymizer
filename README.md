@@ -171,6 +171,38 @@ Notes on rewriting:
 * Known issue (planned to be fixed in 1.1.2): a `<mask>` with a hash method and no `salt`, either in the `<mask>` or at the top level, outputs the values as they are, not masked, and logs an error for each record, as v1.0.0 does. With `salts` but without `salt`, this happens to some keys too.
 * A key of `md5_keys` and the others with a dot is a nested key. A key of `keys` with a dot is a top-level key, so write a nested key as `$.a.b`.
 
+### Output Plugin (deprecated)
+
+`@type anonymizer` in `<match>` is the output plugin of v1.0.0. It masks a record with the parameters of v1.0.0 above, and emits it with a new tag.
+It is deprecated: use the filter plugin instead, and change the tag with another plugin if you need, such as [fluent-plugin-rewrite-tag-filter](https://github.com/fluent/fluent-plugin-rewrite-tag-filter).
+
+```text
+<match test.message>
+  @type anonymizer
+  sha1_keys         user_id, member_id, mail
+  hash_salt         mysaltstring
+  ipaddr_mask_keys  host
+  tag               anonymized.${tag}
+  remove_tag_prefix test.
+</match>
+
+<match anonymized.message>
+  @type stdout
+</match>
+```
+
+It needs one or more of the following parameters, which change the tag in this order.
+
+* `remove_tag_prefix`, `remove_tag_suffix`: Remove the string from the start or the end of the tag.
+* `add_tag_prefix`, `add_tag_suffix`: Add the string to the start or the end of the tag. A dot is not added.
+* `tag`: The new tag. `${tag}` and `__TAG__` are the tag after the parameters above. `${tag_parts[N]}` and `__TAG_PARTS[N]__` are a part of it split by dots, and `[N..M]` and `[N...M]` are a range. `${hostname}` and `__HOSTNAME__` are the host name.
+
+`include_tag_key true` sets the new tag to the key `tag_key` (default: `tag`) of the record.
+
+If the new tag matches the same `<match>`, the event is emitted again and again. Use a pattern that does not match the new tag.
+
+Where v1.0.0 raised an error and emitted no event, the event is emitted now: a nested key through a value that is not a Hash is left as it is, and `${tag_parts[N]}` out of the tag becomes an empty string, with a warning once for each input tag. An Array of IP addresses is masked for each element, and an element that is not an IP address is left as it is, while v1.0.0 left the whole Array.
+
 ## Notes
 
 * Hash and Array values on Ruby 3.4 and later
