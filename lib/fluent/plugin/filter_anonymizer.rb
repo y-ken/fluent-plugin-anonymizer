@@ -251,8 +251,9 @@ EOF
 
         conv = MASK_METHODS[c.method].call(c)
         # null in keys is skipped, as in v1.0.0.
-        c.keys.compact.each do |key|
-          @masks << masker_for_key_chain(conv, key_path(key), c)
+        keys = c.keys.compact
+        keys.each_with_index do |key, i|
+          @masks << masker_for_key_chain(conv, key_path(key, keys[(i + 1)..-1], c), c)
         end
         @masks << masker_for_key_pattern(conv, c.key_pattern, c) if c.key_pattern
         @masks << masker_for_value_pattern(conv, c.value_pattern, c) if c.value_pattern
@@ -271,23 +272,58 @@ EOF
       record.update(@masks.reduce(record){|r,mask| mask.call(r)})
     end
 
+    NESTED_KEY_SYNTAX = "Write a nested key as $.user.name, or with brackets, such as $['user']['first name']."
+
     # Returns the path of a key in keys, an Array of keys: the keys of a key
-    # in the syntax of record_accessor ($.a.b or $['a']['b']), or the key
-    # itself for any other key, even if it has a dot or is not a String, as
-    # in v1.0.0. A key that starts with $. or $[ but is not in the syntax of
-    # record_accessor is a top-level key too, as in v1.0.0.
-    def key_path(key)
-      if key.is_a?(String) && key.start_with?('$.', '$[')
-        begin
-          path = Fluent::PluginHelper::RecordAccessor::Accessor.parse_parameter(key)
-          return path.is_a?(Array) ? path : [path]
-        rescue StandardError => e
-          log.warn "#{key.inspect} in keys is not in the syntax of record_accessor (#{e.class}: #{e.message}), " \
-                   "so it is the top-level key #{key.inspect}, as in v1.0.0. " \
-                   "For a nested key, write each key in brackets, such as $['user']['first name']."
-        end
+    # that starts with $. or $[, in the syntax of record_accessor ($.a.b or
+    # $['a']['b']), or the key itself for any other key, even if it has a dot
+    # or is not a String, as in v1.0.0. rest is the keys after key in keys.
+    #
+    # A key that starts with $. or $[ but that record_accessor cannot read,
+    # or reads as a path that is not what the key shows, such as $[0] (the
+    # index 0) or $.a. (the key a), stops Fluentd at start, as master does
+    # for most of them, so that a typo does not leave a nested value
+    # unmasked.
+    def key_path(key, rest, opts)
+      return [key] unless key.is_a?(String) && key.start_with?('$.', '$[')
+      path, error = parse_key(key)
+      raise Fluent::ConfigError, "#{key.inspect} in keys of <mask #{opts.method}> #{error}#{comma_hint(key, rest)}" if error
+      path
+    end
+
+    # Reads a key that starts with $. or $[ with record_accessor. Returns
+    # [path, nil], or [nil, why the key is not read].
+    def parse_key(key)
+      begin
+        path = Fluent::PluginHelper::RecordAccessor::Accessor.parse_parameter(key)
+      rescue StandardError => e
+        return [nil, "is not in the syntax of record_accessor (#{e.class}: #{e.message}). #{NESTED_KEY_SYNTAX}"]
       end
-      [key]
+      path = [path] unless path.is_a?(Array)
+      problem =
+        if !path.first.is_a?(String) then "its first key is not a key of the record"
+        elsif key.start_with?('$.') && path.include?('') then "it has an empty key. For a key named \"\", write $['']"
+        elsif key.end_with?('.') then "it ends with a dot"
+        end
+      return [path, nil] unless problem
+      [nil, "is read by record_accessor as #{path.inspect}, and #{problem}. #{NESTED_KEY_SYNTAX}"]
+    end
+
+    # keys is an Array type, which splits its value at each comma, so
+    # keys $['a,b'] gives the keys $['a and b']. Returns how to write such a
+    # key, if key and the keys after it in rest are such a key.
+    def comma_hint(key, rest)
+      return '' unless key.start_with?('$[') && !key.end_with?(']')
+      parts = [key]
+      rest.each do |k|
+        break unless k.is_a?(String)
+        parts << k
+        break if k.end_with?(']')
+      end
+      return '' unless parts.size > 1 && parts.last.end_with?(']')
+      joined = parts.join(',')
+      " keys splits its value at each comma, so #{joined} became #{parts.map(&:inspect).join(' and ')}. " \
+        "For a key with a comma, write keys as a JSON array, such as keys [#{joined.inspect}]."
     end
 
     # Replaces the value at path in record with the value of the block, if

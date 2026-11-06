@@ -665,16 +665,51 @@ CONF
     end
 
     # v1.0.0 did not know record_accessor, so these keys were top-level keys
-    # there, and Fluentd started.
-    data("a space" => "$.user name", "an open bracket" => "$[foo", "a bracket without quotes" => "$.a[x]")
-    test "keys that record_accessor cannot read is a top-level key, as v1.0.0" do |key|
-      d = create_driver("<mask sha1>\n  keys #{key}\n  salt s\n</mask>")
-      d.run(default_tag: 'test') { d.feed(@time, {key => "alice", "user" => {"name" => "bob"}}) }
+    # there, and Fluentd started. master stops at start for them, and so does
+    # this version, so that a typo does not leave a nested value unmasked.
+    data("a space" => "$.user name", "an open bracket" => "$[foo", "a bracket without quotes" => "$.a[x]",
+         "a bracket after a dot" => "$.a['b']", "more after a bracket" => "$['a'].b")
+    test "keys that record_accessor cannot read stops at start" do |key|
+      e = assert_raise(Fluent::ConfigError) { create_driver("<mask sha1>\n  keys #{key}\n  salt s\n</mask>") }
+      assert_include e.message, "#{key.inspect} in keys of <mask sha1> is not in the syntax of record_accessor"
+      assert_include e.message, "$.user.name"
+      assert_not_include e.message, "keys splits"
+    end
+
+    data("two keys" => ["$['a,b']", %q(keys ["$['a,b']"])],
+         "three keys" => ["$['a,b,c'], d", %q(keys ["$['a,b,c']"])])
+    test "keys with a comma in brackets stops at start, and shows a JSON array" do |(keys, hint)|
+      e = assert_raise(Fluent::ConfigError) { create_driver("<mask sha1>\n  keys #{keys}\n  salt s\n</mask>") }
+      assert_include e.message, %q("$['a" in keys of <mask sha1> is not in the syntax of record_accessor)
+      assert_include e.message, hint
+    end
+
+    test "keys with a comma in brackets works as a JSON array" do
+      d = create_driver(%Q(<mask sha1>\n  keys ["$['a,b']"]\n  salt s\n</mask>))
+      d.run(default_tag: 'test') { d.feed(@time, {"a,b" => "alice", "a" => "x"}) }
       sha1 = OpenSSL::Digest.new("sha1").update("s").update("alice").hexdigest
-      assert_equal [{key => sha1, "user" => {"name" => "bob"}}], d.filtered_records
-      warnings = d.logs.grep(/\[warn\]: .*is not in the syntax of record_accessor/)
-      assert_equal 1, warnings.size, d.logs.join
-      assert_include warnings.first, "the top-level key #{key.inspect}"
+      assert_equal [{"a,b" => sha1, "a" => "x"}], d.filtered_records
+    end
+
+    # record_accessor reads these keys as a path that is not what the key
+    # shows: [0], ["", "a"], ["a"] and ["a", "", "b"].
+    data("an index" => ["$[0]", "its first key is not a key of the record"],
+         "an index after a dot" => ["$.[0]", nil],
+         "two dots" => ["$..a", "it has an empty key"],
+         "two dots inside" => ["$.a..b", "it has an empty key"],
+         "a dot at the end" => ["$.a.", "it ends with a dot"])
+    test "keys that record_accessor reads as another path stops at start" do |(key, problem)|
+      e = assert_raise(Fluent::ConfigError) { create_driver("<mask sha1>\n  keys #{key}\n  salt s\n</mask>") }
+      assert_include e.message, "#{key.inspect} in keys of <mask sha1>"
+      assert_include e.message, problem if problem
+    end
+
+    test "keys with an empty key in brackets is the key \"\"" do
+      d = create_driver("<mask sha1>\n  keys $[''], $['a']['']\n  salt s\n</mask>")
+      d.run(default_tag: 'test') { d.feed(@time, {"" => "alice", "a" => {"" => "bob", "b" => "x"}}) }
+      sha1 = ->(v) { OpenSSL::Digest.new("sha1").update("s").update(v).hexdigest }
+      assert_equal [{"" => sha1.("alice"), "a" => {"" => sha1.("bob"), "b" => "x"}}], d.filtered_records
+      assert_equal [], d.logs.grep(/\[(warn|error)\]/)
     end
 
     test "keys skips null, as v1.0.0" do
