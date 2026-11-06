@@ -106,6 +106,12 @@ Mask section will use following configuration syntax:
 * `keys` (default: [])
 
 Specify one or more keys that will be applied hash algorithm.
+A key is a top-level key of the record, even if it has a dot: `user.name` is the key `"user.name"`, and Fluentd warns when it starts, because 1.1.0 read it as a nested key.
+For a nested key, use the syntax of [record_accessor](https://docs.fluentd.org/plugin-helper-overview/api-plugin-helper-record_accessor), such as `$.user.name` or `$['user']['name']`.
+A key that starts with `$.` or `$[` but is not in that syntax, such as `$.user name`, or that record_accessor reads as another key, such as `$[0]`, `$..a` or `$.a.`, stops Fluentd with an error when it starts.
+`keys` is split at each comma, so write a key with a comma as a JSON array, such as `keys ["$['a,b']"]`.
+Fluentd also warns when it starts if two keys in a `<mask>` are the same key, such as `a` and `$.a`, because the value is masked once for each of them.
+A key that exists is masked even if its value is `null` or `false`.
 
 * `key_pattern` (default: nil)
 
