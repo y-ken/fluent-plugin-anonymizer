@@ -373,6 +373,10 @@ def compare_results(records, before, after)
     compare(records[i], brecord, arecord, ["record #{i}"], problems, changes)
   end
   new_records = (after[:outputs].keys - before[:outputs].keys).sort
+  new_records.reject { |i| i.between?(0, records.size - 1) }.each do |i|
+    problems << "record #{i} is output, but there is no record #{i} in the input"
+  end
+  new_records.select! { |i| i.between?(0, records.size - 1) }
   unless new_records.empty?
     masked = {}
     before[:outputs].each { |i, (_, record)| masked_paths(records[i], record, masked) }
