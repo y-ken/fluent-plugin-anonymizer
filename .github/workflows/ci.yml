@@ -11,16 +11,19 @@ permissions:
 jobs:
   unit:
     name: Unit tests (Ruby ${{ matrix.ruby }}${{ matrix.fluentd && format(', Fluentd {0}', matrix.fluentd) || '' }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
         ruby: ['3.3', '3.4', '4.0']
         # Fluentd 1.20.1 and later need Ruby 3.3 or later, so Ruby 2.7 and 3.2
         # run on Fluentd 1.16. The Gemfile reads FLUENTD_VERSION.
+        # Ruby 2.7 runs on ubuntu-24.04: ubuntu-latest becomes Ubuntu 26.04,
+        # for which ruby/setup-ruby has no Ruby 3.1 or older.
         include:
           - ruby: '2.7'
             fluentd: '~> 1.16.0'
+            os: ubuntu-24.04
           - ruby: '3.2'
             fluentd: '~> 1.16.0'
     env:
@@ -45,14 +48,16 @@ jobs:
   # baseline, the output of v1.0.0 on Ruby 2.7, without running v1.0.0.
   config-compat:
     name: Config compat with v1.0.0 (Ruby ${{ matrix.ruby }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Ruby 2.7 must run every configuration with v1.0.0.
+          # Ruby 2.7 must run every configuration with v1.0.0. It runs on
+          # ubuntu-24.04, as in the unit tests.
           - ruby: '2.7'
             fluentd: '~> 1.16.0'
+            os: ubuntu-24.04
             options: --fail-on-skip --baseline test/compat/released-1.0.0-ruby2.7.json 1.0.0
           - ruby: '3.2'
             fluentd: '~> 1.16.0'
