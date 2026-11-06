@@ -89,6 +89,10 @@ LOGGED_MIN_BYTES = 5
 # A String in the input that is shorter is not looked for in an output value:
 # "42" may be in a digest.
 RAW_MIN_BYTES = 5
+# A digest of a hash method. A String of the input that has only hex digits,
+# such as "12345", may be in a digest by chance, so it is not looked for in a
+# digest.
+DIGEST = /\A\h{32,}\z/
 
 def latest_released_version
   uri = URI("https://rubygems.org/api/v1/versions/fluent-plugin-anonymizer/latest.json")
@@ -250,8 +254,9 @@ end
 # value, the same bytes in another encoding, to_s or inspect of the input,
 # the input after scrub, the same address written by IPAddr#to_s, or a value
 # with a String that contains a String of the input of RAW_MIN_BYTES or
-# more, as it is or after scrub. So a mask that returns v.to_s for a value
-# that it cannot mask, or "::ffff:10.1.2.3" for "10.1.2.3", does not mask.
+# more, as it is or after scrub, unless that String is a digest (DIGEST). So
+# a mask that returns v.to_s for a value that it cannot mask, or
+# "::ffff:10.1.2.3" for "10.1.2.3", does not mask.
 def raw?(input, out)
   return false if input.equal?(MISSING) || out.equal?(MISSING)
   return true if same?(input, out, true)
@@ -263,7 +268,8 @@ def raw?(input, out)
     return true if forms.any? { |f| f.b == out.b }
   end
   parts = strings_in(input).flat_map { |s| [s.b, s.scrub.b] }.select { |s| s.bytesize >= RAW_MIN_BYTES }.uniq
-  return true if parts.any? { |part| outs.any? { |o| o.include?(part) } }
+  texts = outs.reject { |o| o.match?(DIGEST) }
+  return true if parts.any? { |part| texts.any? { |o| o.include?(part) } }
   return false unless input.is_a?(String) && out.is_a?(String) && !input.include?("/")
   begin
     IPAddr.new(input).to_s.b == out.b
@@ -335,7 +341,7 @@ def masked_paths(input, out, found, path = [])
   elsif out.is_a?(Array) && input.is_a?(Array) && out.size == input.size
     out.each_with_index { |v, i| masked_paths(input[i], v, found, path + [[]]) }
   elsif !input.equal?(MISSING) && out.is_a?(String) && !raw?(input, out)
-    kind = if out.match?(/\A\h{32,}\z/) then :hash
+    kind = if out.match?(DIGEST) then :hash
            elsif address?(out) then :network
            end
     found[path] = (found[path] || []) | [kind] if kind
