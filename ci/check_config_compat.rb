@@ -342,18 +342,48 @@ def masked_paths(input, out, found, path = [])
   end
 end
 
-# Adds a problem for each value of a record that the released gem did not
-# output that is raw where the released gem masked such a value (see the
-# top of this file). An empty Array or Hash shows nothing, so it may be raw.
-def check_new_record(input, out, masked, path, where, problems)
+# Whether the input value at a path must not be raw in a record that the
+# released gem did not output (see the top of this file). An empty Array or
+# Hash shows nothing, so it may be raw.
+def must_mask?(input, masked, path)
   kinds = masked[path] || []
-  if (kinds.include?(:hash) || (kinds.include?(:network) && address?(input))) &&
-     !(input.respond_to?(:empty?) && !input.is_a?(String) && input.empty?) && raw?(input, out)
+  (kinds.include?(:hash) || (kinds.include?(:network) && address?(input))) &&
+    !(input.respond_to?(:empty?) && !input.is_a?(String) && input.empty?)
+end
+
+# A value, and each value in the Hashes and Arrays in it, with its path. An
+# index of an Array is [] in a path.
+def nested_values(value, path = [], found = [])
+  found << [path, value]
+  case value
+  when Hash then value.each { |k, v| nested_values(v, path + [k], found) }
+  when Array then value.each { |v| nested_values(v, path + [[]], found) }
+  end
+  found
+end
+
+# Adds a problem for each value of a record that the released gem did not
+# output that is raw where the released gem masked such a value. Where the
+# output has another shape than the input, such as an Array of another size
+# or a Hash replaced by a String, a value of the output cannot be matched
+# with a value of the input by its path. Then no value in the output may be
+# raw for a value in the input that must be masked.
+def check_new_record(input, out, masked, path, where, problems)
+  if must_mask?(input, masked, path) && raw?(input, out)
     problems << "#{where.map(&:inspect).join(' ')}: raw where the released gem masked the value in another record (#{short(out)})"
   elsif out.is_a?(Hash) && input.is_a?(Hash)
     out.each { |k, v| check_new_record(input[k], v, masked, path + [k], where + [k], problems) if input.key?(k) }
   elsif out.is_a?(Array) && input.is_a?(Array) && out.size == input.size
     out.each_with_index { |v, i| check_new_record(input[i], v, masked, path + [[]], where + [i], problems) }
+  elsif [input, out].any? { |v| v.is_a?(Hash) || v.is_a?(Array) }
+    outs = nested_values(out).map(&:last)
+    raw = nested_values(input, path).flat_map do |p, value|
+      must_mask?(value, masked, p) ? outs.select { |o| raw?(value, o) } : []
+    end
+    unless raw.empty?
+      problems << "#{where.map(&:inspect).join(' ')}: raw where the released gem masked the value in another record, " \
+                  "in another shape (#{short(raw.first)} in #{short(out)})"
+    end
   end
 end
 
