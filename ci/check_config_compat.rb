@@ -44,6 +44,12 @@
 #   ruby ci/check_config_compat.rb --write-baseline FILE RELEASED_VERSION
 #     Writes the output of RELEASED_VERSION to FILE.
 #
+# Fluentd runs with the bundle command in PATH, which may run on another Ruby
+# than this script, such as the global Ruby of rbenv. Each run of Fluentd
+# writes the Ruby that it runs on, and the check stops when it is not the Ruby
+# of this script, because the output of v1.0.0 depends on the Ruby. Run this
+# script with the Ruby of the bundle command, such as with RBENV_VERSION.
+#
 # On Ruby 3.4 and later, a run of v1.0.0 can report a Hash value, or an
 # Array that holds a Hash, as broken ("masked -> another value"), and
 # --baseline FILE 1.0.0 also says that FILE is not the output of 1.0.0.
@@ -89,6 +95,10 @@ LOGGED_MIN_BYTES = 5
 # A String in the input that is shorter is not looked for in an output value:
 # "42" may be in a digest.
 RAW_MIN_BYTES = 5
+# A digest of a hash method. A String of the input that has only hex digits,
+# such as "12345", may be in a digest by chance, so it is not looked for in a
+# digest.
+DIGEST = /\A\h{32,}\z/
 
 def latest_released_version
   uri = URI("https://rubygems.org/api/v1/versions/fluent-plugin-anonymizer/latest.json")
@@ -150,6 +160,22 @@ def logged_strings(records, log)
   strings_in(records).select { |s| s.bytesize >= LOGGED_MIN_BYTES && log_forms(s).any? { |f| log.include?(f) } }.uniq
 end
 
+# The code of a file that Fluentd requires (-r), so that it writes the version
+# of the Ruby that it runs on.
+RUBY_REPORTER = <<~'RUBY'
+  $stdout.write("COMPAT-RUBY #{RUBY_VERSION}\n")
+  $stdout.flush
+RUBY
+
+# Stops the check when Fluentd ran on another Ruby than this script (see the
+# top of this file). A run that fails before Fluentd requires the reporter
+# does not say its Ruby.
+def check_ruby(result, name, gem)
+  return if result[:ruby] == RUBY_VERSION || (result[:ruby].nil? && result[:status] == :error)
+  abort "#{name}: Fluentd ran on Ruby #{result[:ruby] || '(unknown)'} with #{gem}, not on Ruby #{RUBY_VERSION} " \
+        "of this script. Run this script with the Ruby of the bundle command in PATH."
+end
+
 def stop(thread)
   Process.kill(:TERM, thread.pid)
 rescue Errno::ESRCH
@@ -166,6 +192,8 @@ end
 #   message: why the run failed, for :error
 #   errors: the messages of the [error] lines
 #   logged: the Strings of the records that are in the log
+#   ruby: the version of the Ruby that Fluentd runs on, which the file
+#         reporter in options writes (nil if Fluentd stops before it)
 def run_config(env, dir, config, records, options = [])
   result = { status: :error, outputs: {}, duplicates: [], errors: [] }
   raised = [] # other lines with an exception
@@ -183,6 +211,8 @@ def run_config(env, dir, config, records, options = [])
               index = Integer(index)
               result[:duplicates] << index if result[:outputs].key?(index)
               result[:outputs][index] = Marshal.load(data.strip.unpack1("m0"))
+            elsif line.start_with?("COMPAT-RUBY ")
+              result[:ruby] = line.split(" ")[1]
             elsif line.start_with?("COMPAT-EMITTED ")
               emitted = true
               stop(thread)
@@ -250,8 +280,9 @@ end
 # value, the same bytes in another encoding, to_s or inspect of the input,
 # the input after scrub, the same address written by IPAddr#to_s, or a value
 # with a String that contains a String of the input of RAW_MIN_BYTES or
-# more, as it is or after scrub. So a mask that returns v.to_s for a value
-# that it cannot mask, or "::ffff:10.1.2.3" for "10.1.2.3", does not mask.
+# more, as it is or after scrub, unless that String is a digest (DIGEST). So
+# a mask that returns v.to_s for a value that it cannot mask, or
+# "::ffff:10.1.2.3" for "10.1.2.3", does not mask.
 def raw?(input, out)
   return false if input.equal?(MISSING) || out.equal?(MISSING)
   return true if same?(input, out, true)
@@ -263,7 +294,8 @@ def raw?(input, out)
     return true if forms.any? { |f| f.b == out.b }
   end
   parts = strings_in(input).flat_map { |s| [s.b, s.scrub.b] }.select { |s| s.bytesize >= RAW_MIN_BYTES }.uniq
-  return true if parts.any? { |part| outs.any? { |o| o.include?(part) } }
+  texts = outs.reject { |o| o.match?(DIGEST) }
+  return true if parts.any? { |part| texts.any? { |o| o.include?(part) } }
   return false unless input.is_a?(String) && out.is_a?(String) && !input.include?("/")
   begin
     IPAddr.new(input).to_s.b == out.b
@@ -335,25 +367,55 @@ def masked_paths(input, out, found, path = [])
   elsif out.is_a?(Array) && input.is_a?(Array) && out.size == input.size
     out.each_with_index { |v, i| masked_paths(input[i], v, found, path + [[]]) }
   elsif !input.equal?(MISSING) && out.is_a?(String) && !raw?(input, out)
-    kind = if out.match?(/\A\h{32,}\z/) then :hash
+    kind = if out.match?(DIGEST) then :hash
            elsif address?(out) then :network
            end
     found[path] = (found[path] || []) | [kind] if kind
   end
 end
 
-# Adds a problem for each value of a record that the released gem did not
-# output that is raw where the released gem masked such a value (see the
-# top of this file). An empty Array or Hash shows nothing, so it may be raw.
-def check_new_record(input, out, masked, path, where, problems)
+# Whether the input value at a path must not be raw in a record that the
+# released gem did not output (see the top of this file). An empty Array or
+# Hash shows nothing, so it may be raw.
+def must_mask?(input, masked, path)
   kinds = masked[path] || []
-  if (kinds.include?(:hash) || (kinds.include?(:network) && address?(input))) &&
-     !(input.respond_to?(:empty?) && !input.is_a?(String) && input.empty?) && raw?(input, out)
+  (kinds.include?(:hash) || (kinds.include?(:network) && address?(input))) &&
+    !(input.respond_to?(:empty?) && !input.is_a?(String) && input.empty?)
+end
+
+# A value, and each value in the Hashes and Arrays in it, with its path. An
+# index of an Array is [] in a path.
+def nested_values(value, path = [], found = [])
+  found << [path, value]
+  case value
+  when Hash then value.each { |k, v| nested_values(v, path + [k], found) }
+  when Array then value.each { |v| nested_values(v, path + [[]], found) }
+  end
+  found
+end
+
+# Adds a problem for each value of a record that the released gem did not
+# output that is raw where the released gem masked such a value. Where the
+# output has another shape than the input, such as an Array of another size
+# or a Hash replaced by a String, a value of the output cannot be matched
+# with a value of the input by its path. Then no value in the output may be
+# raw for a value in the input that must be masked.
+def check_new_record(input, out, masked, path, where, problems)
+  if must_mask?(input, masked, path) && raw?(input, out)
     problems << "#{where.map(&:inspect).join(' ')}: raw where the released gem masked the value in another record (#{short(out)})"
   elsif out.is_a?(Hash) && input.is_a?(Hash)
     out.each { |k, v| check_new_record(input[k], v, masked, path + [k], where + [k], problems) if input.key?(k) }
   elsif out.is_a?(Array) && input.is_a?(Array) && out.size == input.size
     out.each_with_index { |v, i| check_new_record(input[i], v, masked, path + [[]], where + [i], problems) }
+  elsif [input, out].any? { |v| v.is_a?(Hash) || v.is_a?(Array) }
+    outs = nested_values(out).map(&:last)
+    raw = nested_values(input, path).flat_map do |p, value|
+      must_mask?(value, masked, p) ? outs.select { |o| raw?(value, o) } : []
+    end
+    unless raw.empty?
+      problems << "#{where.map(&:inspect).join(' ')}: raw where the released gem masked the value in another record, " \
+                  "in another shape (#{short(raw.first)} in #{short(out)})"
+    end
   end
 end
 
@@ -373,6 +435,10 @@ def compare_results(records, before, after)
     compare(records[i], brecord, arecord, ["record #{i}"], problems, changes)
   end
   new_records = (after[:outputs].keys - before[:outputs].keys).sort
+  new_records.reject { |i| i.between?(0, records.size - 1) }.each do |i|
+    problems << "record #{i} is output, but there is no record #{i} in the input"
+  end
+  new_records.select! { |i| i.between?(0, records.size - 1) }
   unless new_records.empty?
     masked = {}
     before[:outputs].each { |i, (_, record)| masked_paths(records[i], record, masked) }
@@ -387,11 +453,12 @@ end
 
 # A baseline keeps the result of the released gem for each configuration, in
 # JSON, so that a review can read what the released gem output, and what a
-# new baseline changes. It has the version of the gem, Ruby and Fluentd, the
-# digest of test/compat/records.rb, and for each configuration its digest and
-# the result of run_config. Each output record is {"tag": TAG, "record":
-# RECORD}, at the index of the record. JSON has no encoding of a String, and
-# no key that is not a String, so the values are written as follows:
+# new baseline changes. It has the version of the gem, the Ruby that Fluentd
+# ran on, the version of Fluentd, the digest of test/compat/records.rb, and
+# for each configuration its digest and the result of run_config. Each output
+# record is {"tag": TAG, "record": RECORD}, at the index of the record. JSON
+# has no encoding of a String, and no key that is not a String, so the values
+# are written as follows:
 #
 # * A String in UTF-8 that is valid is a JSON String.
 # * Another String is {"$string": TEXT, "encoding": ENCODING} if its bytes
@@ -486,11 +553,14 @@ def baseline_result(result)
 end
 
 def write_baseline(file, released, fluentd, results)
+  rubies = results.values.map { |r| r[:ruby] }.compact.uniq
+  abort "no run of #{released} says the Ruby that Fluentd ran on" if rubies.empty?
+  abort "the runs of #{released} ran on Ruby #{rubies.join(', ')}" if rubies.size > 1
   data = {
     "comment" => "The output of fluent-plugin-anonymizer #{released} for each configuration in test/compat/configs. " \
                  "Written by: ruby ci/check_config_compat.rb --write-baseline #{file} #{released}",
     "version" => utf8(released),
-    "ruby" => utf8(RUBY_VERSION),
+    "ruby" => utf8(rubies.first),
     "fluentd" => utf8(fluentd),
     "records" => utf8(digest_of(RECORDS_FILE)),
     "configs" => results.each_with_object({}) do |(config, result), h|
@@ -584,6 +654,8 @@ Dir.mktmpdir do |tmp|
   current_dir = File.join(tmp, "current")
   Dir.mkdir(released_dir)
   Dir.mkdir(current_dir)
+  reporter = File.join(tmp, "compat_ruby.rb")
+  File.write(reporter, RUBY_REPORTER)
   current_env = write_gemfile(current_dir, FLUENTD_REQUIREMENT, %(gem "fluent-plugin-anonymizer", path: #{ROOT.inspect}))
   fluentd = fluentd_version(current_env, current_dir)
   if released
@@ -600,7 +672,8 @@ Dir.mktmpdir do |tmp|
       # loading it, so they work on Ruby 3 only if another plugin, such as
       # record_transformer of Fluentd, has loaded it. Load it, to run them.
       # It does not change the output on Ruby 2.7.
-      before = run_config(released_env, released_dir, config, records, ["-r", "ostruct"])
+      before = run_config(released_env, released_dir, config, records, ["-r", "ostruct", "-r", reporter])
+      check_ruby(before, name, released)
       if write_file
         written[config] = before
         puts "#{name}: #{before[:status]}"
@@ -622,7 +695,8 @@ Dir.mktmpdir do |tmp|
       puts "#{name}: skipped: fails with #{compared} too (#{before[:message]})"
       next
     end
-    after = run_config(current_env, current_dir, config, records)
+    after = run_config(current_env, current_dir, config, records, ["-r", reporter])
+    check_ruby(after, name, "this repository")
     if after[:status] == :error
       broken << name
       puts "#{name}: BROKEN: #{after[:message]}"
