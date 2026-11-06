@@ -366,7 +366,7 @@ EOF
 
     def self.child?(container, key)
       case container
-      when Hash then container.has_key?(key)
+      when Hash then container.key?(key)
       when Array then key.is_a?(Integer) && key >= -container.size && key < container.size
       else false
       end
@@ -399,7 +399,7 @@ EOF
       salt = opts.salt || salt_determine(key)
       ->(record){
         begin
-          if record.has_key?(key)
+          if record.key?(key)
             record[key] = mask_value(record[key], for_each){|v| conv.call(v, salt) }
           end
         rescue => e
