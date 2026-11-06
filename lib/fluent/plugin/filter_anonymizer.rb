@@ -283,9 +283,19 @@ EOF
     # or reads as a path that is not what the key shows, such as $[0] (the
     # index 0) or $.a. (the key a), stops Fluentd at start, as master does
     # for most of them, so that a typo does not leave a nested value
-    # unmasked.
+    # unmasked. A key with a dot that does not start with $. or $[ is a
+    # top-level key, as in v1.0.0, with a warning, because master read it as
+    # a nested key.
     def key_path(key, rest, opts)
-      return [key] unless key.is_a?(String) && key.start_with?('$.', '$[')
+      return [key] unless key.is_a?(String)
+      unless key.start_with?('$.', '$[')
+        if key.include?('.')
+          example = !key.start_with?('$') && parse_key("$.#{key}").first ? "$.#{key}" : 'it as $.user.name'
+          log.warn "#{key.inspect} in keys of <mask #{opts.method}> is the top-level key #{key.inspect}, as in v1.0.0, " \
+                   "though it has a dot. 1.1.0 read it as a nested key. For a nested key, write #{example}."
+        end
+        return [key]
+      end
       path, error = parse_key(key)
       raise Fluent::ConfigError, "#{key.inspect} in keys of <mask #{opts.method}> #{error}#{comma_hint(key, rest)}" if error
       path

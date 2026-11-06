@@ -712,6 +712,26 @@ CONF
       assert_equal [], d.logs.grep(/\[(warn|error)\]/)
     end
 
+    # master and 1.1.0 read such a key as a nested key.
+    data("a dot" => ["user.name", "write $.user.name."],
+         "$ without a dot" => ["$user.name", "write it as $.user.name."],
+         "a dot at the start" => [".name", "write it as $.user.name."])
+    test "keys with a dot that is not of record_accessor warns at start, and is a top-level key" do |(key, example)|
+      d = create_driver("<mask sha1>\n  keys #{key}, other\n  salt s\n</mask>")
+      d.run(default_tag: 'test') { d.feed(@time, {key => "flat", "user" => {"name" => "bob"}}) }
+      sha1 = OpenSSL::Digest.new("sha1").update("s").update("flat").hexdigest
+      assert_equal [{key => sha1, "user" => {"name" => "bob"}}], d.filtered_records
+      warnings = d.logs.grep(/\[warn\]/)
+      assert_equal 1, warnings.size, d.logs.join
+      assert_include warnings.first, "#{key.inspect} in keys of <mask sha1> is the top-level key #{key.inspect}"
+      assert_include warnings.first, example
+    end
+
+    test "keys without a dot or with record_accessor does not warn" do
+      d = create_driver("<mask sha1>\n  keys user, $.user.name, $['user.name']\n  salt s\n</mask>")
+      assert_equal [], d.logs.grep(/\[warn\]/)
+    end
+
     test "keys skips null, as v1.0.0" do
       d = create_driver("<mask sha1>\n  keys [null, \"a\"]\n  salt s\n</mask>")
       d.run(default_tag: 'test') { d.feed(@time, {nil => "x", "a" => "alice"}) }
