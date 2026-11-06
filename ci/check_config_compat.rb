@@ -44,6 +44,12 @@
 #   ruby ci/check_config_compat.rb --write-baseline FILE RELEASED_VERSION
 #     Writes the output of RELEASED_VERSION to FILE.
 #
+# Fluentd runs with the bundle command in PATH, which may run on another Ruby
+# than this script, such as the global Ruby of rbenv. Each run of Fluentd
+# writes the Ruby that it runs on, and the check stops when it is not the Ruby
+# of this script, because the output of v1.0.0 depends on the Ruby. Run this
+# script with the Ruby of the bundle command, such as with RBENV_VERSION.
+#
 # On Ruby 3.4 and later, a run of v1.0.0 can report a Hash value, or an
 # Array that holds a Hash, as broken ("masked -> another value"), and
 # --baseline FILE 1.0.0 also says that FILE is not the output of 1.0.0.
@@ -154,6 +160,22 @@ def logged_strings(records, log)
   strings_in(records).select { |s| s.bytesize >= LOGGED_MIN_BYTES && log_forms(s).any? { |f| log.include?(f) } }.uniq
 end
 
+# The code of a file that Fluentd requires (-r), so that it writes the version
+# of the Ruby that it runs on.
+RUBY_REPORTER = <<~'RUBY'
+  $stdout.write("COMPAT-RUBY #{RUBY_VERSION}\n")
+  $stdout.flush
+RUBY
+
+# Stops the check when Fluentd ran on another Ruby than this script (see the
+# top of this file). A run that fails before Fluentd requires the reporter
+# does not say its Ruby.
+def check_ruby(result, name, gem)
+  return if result[:ruby] == RUBY_VERSION || (result[:ruby].nil? && result[:status] == :error)
+  abort "#{name}: Fluentd ran on Ruby #{result[:ruby] || '(unknown)'} with #{gem}, not on Ruby #{RUBY_VERSION} " \
+        "of this script. Run this script with the Ruby of the bundle command in PATH."
+end
+
 def stop(thread)
   Process.kill(:TERM, thread.pid)
 rescue Errno::ESRCH
@@ -170,6 +192,8 @@ end
 #   message: why the run failed, for :error
 #   errors: the messages of the [error] lines
 #   logged: the Strings of the records that are in the log
+#   ruby: the version of the Ruby that Fluentd runs on, which the file
+#         reporter in options writes (nil if Fluentd stops before it)
 def run_config(env, dir, config, records, options = [])
   result = { status: :error, outputs: {}, duplicates: [], errors: [] }
   raised = [] # other lines with an exception
@@ -187,6 +211,8 @@ def run_config(env, dir, config, records, options = [])
               index = Integer(index)
               result[:duplicates] << index if result[:outputs].key?(index)
               result[:outputs][index] = Marshal.load(data.strip.unpack1("m0"))
+            elsif line.start_with?("COMPAT-RUBY ")
+              result[:ruby] = line.split(" ")[1]
             elsif line.start_with?("COMPAT-EMITTED ")
               emitted = true
               stop(thread)
@@ -427,11 +453,12 @@ end
 
 # A baseline keeps the result of the released gem for each configuration, in
 # JSON, so that a review can read what the released gem output, and what a
-# new baseline changes. It has the version of the gem, Ruby and Fluentd, the
-# digest of test/compat/records.rb, and for each configuration its digest and
-# the result of run_config. Each output record is {"tag": TAG, "record":
-# RECORD}, at the index of the record. JSON has no encoding of a String, and
-# no key that is not a String, so the values are written as follows:
+# new baseline changes. It has the version of the gem, the Ruby that Fluentd
+# ran on, the version of Fluentd, the digest of test/compat/records.rb, and
+# for each configuration its digest and the result of run_config. Each output
+# record is {"tag": TAG, "record": RECORD}, at the index of the record. JSON
+# has no encoding of a String, and no key that is not a String, so the values
+# are written as follows:
 #
 # * A String in UTF-8 that is valid is a JSON String.
 # * Another String is {"$string": TEXT, "encoding": ENCODING} if its bytes
@@ -526,11 +553,14 @@ def baseline_result(result)
 end
 
 def write_baseline(file, released, fluentd, results)
+  rubies = results.values.map { |r| r[:ruby] }.compact.uniq
+  abort "no run of #{released} says the Ruby that Fluentd ran on" if rubies.empty?
+  abort "the runs of #{released} ran on Ruby #{rubies.join(', ')}" if rubies.size > 1
   data = {
     "comment" => "The output of fluent-plugin-anonymizer #{released} for each configuration in test/compat/configs. " \
                  "Written by: ruby ci/check_config_compat.rb --write-baseline #{file} #{released}",
     "version" => utf8(released),
-    "ruby" => utf8(RUBY_VERSION),
+    "ruby" => utf8(rubies.first),
     "fluentd" => utf8(fluentd),
     "records" => utf8(digest_of(RECORDS_FILE)),
     "configs" => results.each_with_object({}) do |(config, result), h|
@@ -624,6 +654,8 @@ Dir.mktmpdir do |tmp|
   current_dir = File.join(tmp, "current")
   Dir.mkdir(released_dir)
   Dir.mkdir(current_dir)
+  reporter = File.join(tmp, "compat_ruby.rb")
+  File.write(reporter, RUBY_REPORTER)
   current_env = write_gemfile(current_dir, FLUENTD_REQUIREMENT, %(gem "fluent-plugin-anonymizer", path: #{ROOT.inspect}))
   fluentd = fluentd_version(current_env, current_dir)
   if released
@@ -640,7 +672,8 @@ Dir.mktmpdir do |tmp|
       # loading it, so they work on Ruby 3 only if another plugin, such as
       # record_transformer of Fluentd, has loaded it. Load it, to run them.
       # It does not change the output on Ruby 2.7.
-      before = run_config(released_env, released_dir, config, records, ["-r", "ostruct"])
+      before = run_config(released_env, released_dir, config, records, ["-r", "ostruct", "-r", reporter])
+      check_ruby(before, name, released)
       if write_file
         written[config] = before
         puts "#{name}: #{before[:status]}"
@@ -662,7 +695,8 @@ Dir.mktmpdir do |tmp|
       puts "#{name}: skipped: fails with #{compared} too (#{before[:message]})"
       next
     end
-    after = run_config(current_env, current_dir, config, records)
+    after = run_config(current_env, current_dir, config, records, ["-r", reporter])
+    check_ruby(after, name, "this repository")
     if after[:status] == :error
       broken << name
       puts "#{name}: BROKEN: #{after[:message]}"
