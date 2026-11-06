@@ -130,6 +130,8 @@ An IPv4 address and its IPv4-mapped IPv6 address, such as `192.168.1.1` and `::f
 
 This salt affects for `keys` settings.
 It is recommend to set a hash salt to prevent rainbow table attacks.
+Fluentd writes `xxxxxx` in place of the salt in the configuration that it logs at startup.
+monitor_agent still shows the salt in plain text among the instance variables of the plugin: with `?debug=1` on Fluentd 1.19.2 and earlier, including 1.16, and with `include_debug_info true` on Fluentd 1.19.3 and later. Do not expose monitor_agent to other hosts, for example with `bind 127.0.0.1`.
 
 * `mask_array_elements` (default: false)
 

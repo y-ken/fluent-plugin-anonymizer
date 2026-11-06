@@ -193,4 +193,10 @@ class AnonymizerOutputTest < Test::Unit::TestCase
     d = emit("ipaddr_mask_keys ips\nadd_tag_prefix x.", [{"ips" => ["10.1.2.3", "bad", "2001:db8::1"]}])
     assert_equal [{"ips" => ["10.1.2.0", "bad", "2001:db8::"]}], d.events.map(&:last)
   end
+
+  test "hash_salt is hidden in the configuration that Fluentd logs" do
+    d = create_driver("sha1_keys data\nhash_salt hash_salt_string\nadd_tag_prefix anonymized.")
+    assert_not_match(/hash_salt_string/, d.instance.config.to_s)
+    assert_equal("hash_salt_string", d.instance.hash_salt)
+  end
 end

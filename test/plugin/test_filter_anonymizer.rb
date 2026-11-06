@@ -118,6 +118,27 @@ class AnonymizerFilterTest < Test::Unit::TestCase
       d = create_driver(CONFIG)
       assert_equal 'test_salt_string', d.instance.mask_config_list.first['salt']
     end
+
+    test "salts are hidden in the configuration that Fluentd logs" do
+      d = create_driver(<<~CONF)
+        salt top_salt_string
+        salts ["salts_string1", "salts_string2"]
+        <mask sha1>
+          keys data
+          salt mask_salt_string
+        </mask>
+      CONF
+      dump = d.instance.config.to_s
+      assert_not_match(/salt_string/, dump)
+      assert_equal(3, dump.scan(/^\s*salts? xxxxxx$/).size, dump)
+    end
+
+    test "hash_salt is hidden in the configuration that Fluentd logs" do
+      d = create_driver("hash_salt hash_salt_string\nsha1_keys data")
+      dump = d.instance.config.to_s
+      assert_not_match(/hash_salt_string/, dump)
+      assert_equal("hash_salt_string", d.instance.hash_salt)
+    end
   end
 
   test 'masker_for_key generates a lambda for conversion with exact key match' do

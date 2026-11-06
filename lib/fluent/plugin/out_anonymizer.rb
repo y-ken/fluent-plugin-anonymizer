@@ -19,7 +19,7 @@ module Fluent::Plugin
 
     config_param :tag, :string, default: nil,
                  desc: 'The output tag. ${tag}, __TAG__, ${tag_parts[N]}, __TAG_PARTS[N]__, ${hostname} and __HOSTNAME__ are expanded.'
-    config_param :hash_salt, :string, default: '',
+    config_param :hash_salt, :string, default: '', secret: true,
                  desc: 'The salt for md5_keys, sha1_keys, sha256_keys, sha384_keys and sha512_keys.'
     config_param :ipv4_mask_subnet, :integer, default: 24,
                  desc: 'Anonymize ipv4 addresses by subnet mask.'
