@@ -5,6 +5,351 @@
   "fluentd": "1.16.11",
   "records": "1d7199176adf2daf",
   "configs": {
+    "extra_mapped_subnet.conf": {
+      "digest": "c7973d09abe5f1a1",
+      "status": "ok",
+      "message": null,
+      "errors": [],
+      "duplicates": [],
+      "logged": [],
+      "outputs": {
+        "0": {
+          "tag": "test",
+          "record": {
+            "host": {"$string":"ae331a8ad15dfb264595dd127adc70faf3399ce9311fd63e6da9991649709a2a","encoding":"US-ASCII"},
+            "host6": "2001:db8:0:8d3:0:8a2e:70:7344",
+            "mapped": {"$string":"c724db1db35f8a15653eefd6047e618f81e97c178daf73253922d43d2b8f9e0f","encoding":"US-ASCII"},
+            "not_ip": "localhost",
+            "ips": ["10.1.2.3","2001:db8::1"],
+            "user_id": "alice",
+            "session_id": "sess-secret",
+            "member_id": "12345",
+            "mail": "example@example.com",
+            "tel": "00-0000-0000",
+            "card": "4111111111111111",
+            "num": 42,
+            "null": null,
+            "false": false,
+            "list": ["1000","2000"],
+            "user.name": "flat",
+            "user": "alice",
+            "name": "Tanaka",
+            "url": "http://user:pw@example.com/p?token=SECRET#f",
+            "nest": {
+              "ip": "192.168.1.10",
+              "id": "42",
+              "name": "bob",
+              "null": null,
+              "deep": {
+                "id": "7"
+              }
+            }
+          }
+        },
+        "1": {
+          "tag": "test",
+          "record": {
+            "host": null,
+            "host6": false,
+            "mapped": true,
+            "not_ip": 12345,
+            "ips": [],
+            "user_id": null,
+            "session_id": false,
+            "member_id": 12345,
+            "mail": 1.5,
+            "tel": [],
+            "card": {},
+            "num": -1,
+            "null": "null",
+            "false": "false",
+            "list": [
+              null,
+              false,
+              1,
+              ["x"],
+              {
+                "a": "b"
+              }
+            ],
+            "user.name": null,
+            "user": {
+              "name": "bob"
+            },
+            "name": null,
+            "url": 1,
+            "nest": "not a Hash"
+          }
+        },
+        "2": {
+          "tag": "test",
+          "record": {
+            "host": {"$string":"ae331a8ad15dfb264595dd127adc70faf3399ce9311fd63e6da9991649709a2a","encoding":"US-ASCII"},
+            "host6": "2001:db8:0:8d3:0:8a2e:70:7344",
+            "mapped": {"$string":"c724db1db35f8a15653eefd6047e618f81e97c178daf73253922d43d2b8f9e0f","encoding":"US-ASCII"},
+            "not_ip": "localhost",
+            "ips": ["10.1.2.3","2001:db8::1"],
+            "user_id": ["alice","bob"],
+            "session_id": "sess-secret",
+            "member_id": "12345",
+            "mail": {
+              "a": "b@example.com"
+            },
+            "tel": "00-0000-0000",
+            "card": "4111111111111111",
+            "num": 42,
+            "null": null,
+            "false": false,
+            "list": ["1000","2000"],
+            "user.name": "flat",
+            "user": "alice",
+            "name": "Tanaka",
+            "url": "http://user:pw@example.com/p?token=SECRET#f",
+            "nest": {
+              "ip": ["192.168.1.10","x"],
+              "id": null,
+              "deep": []
+            }
+          }
+        },
+        "3": {
+          "tag": "test",
+          "record": {
+            "$hash": [
+              [
+                "host",
+                {"$string":"f3dcd34d700820e23b269a8b728ec059baf08c107cce102f05a181561818c177","encoding":"US-ASCII"}
+              ],
+              ["host6",{"$string":"2001:db8::1","encoding":"ASCII-8BIT"}],
+              [
+                "mapped",
+                {"$string":"c724db1db35f8a15653eefd6047e618f81e97c178daf73253922d43d2b8f9e0f","encoding":"US-ASCII"}
+              ],
+              ["not_ip","localhost"],
+              [
+                "ips",
+                ["10.1.2.3","2001:db8::1"]
+              ],
+              ["user_id",{"$string":"alice","encoding":"ASCII-8BIT"}],
+              ["session_id","sess-secret"],
+              ["member_id","12345"],
+              ["mail",{"$string":"jose@mydomain","encoding":"ASCII-8BIT"}],
+              ["tel","00-0000-0000"],
+              ["card","4111111111111111"],
+              ["num",42],
+              ["null",null],
+              ["false",false],
+              [
+                "list",
+                ["1000","2000"]
+              ],
+              ["user.name","flat"],
+              ["user","alice"],
+              ["name",{"$string":"田中太郎","encoding":"ASCII-8BIT"}],
+              ["url",{"$string":"/reset?token=SECRET","encoding":"ASCII-8BIT"}],
+              [
+                "nest",
+                {
+                  "ip": {"$string":"192.168.1.10","encoding":"ASCII-8BIT"},
+                  "id": {"$string":"42","encoding":"ASCII-8BIT"}
+                }
+              ],
+              [{"$string":"名前","encoding":"ASCII-8BIT"},{"$string":"田中太郎","encoding":"ASCII-8BIT"}],
+              [{"$string":"mail2","encoding":"ASCII-8BIT"},{"$string":"jose@mydomain","encoding":"ASCII-8BIT"}]
+            ]
+          }
+        },
+        "4": {
+          "tag": "test",
+          "record": {
+            "$hash": [
+              ["host",{"$base64":"MTAuMS4yLjP/","encoding":"UTF-8"}],
+              ["host6","2001:db8:0:8d3:0:8a2e:70:7344"],
+              [
+                "mapped",
+                {"$string":"c724db1db35f8a15653eefd6047e618f81e97c178daf73253922d43d2b8f9e0f","encoding":"US-ASCII"}
+              ],
+              ["not_ip","localhost"],
+              [
+                "ips",
+                ["10.1.2.3","2001:db8::1"]
+              ],
+              ["user_id",{"$base64":"Sm9z6Q==","encoding":"UTF-8"}],
+              ["session_id","sess-secret"],
+              ["member_id","12345"],
+              ["mail",{"$base64":"Sm9z6SA8am9zZUBteWRvbWFpbj4=","encoding":"UTF-8"}],
+              ["tel","00-0000-0000"],
+              ["card","4111111111111111"],
+              ["num",42],
+              ["null",null],
+              ["false",false],
+              [
+                "list",
+                ["1000","2000"]
+              ],
+              ["user.name","flat"],
+              ["user","alice"],
+              ["name",{"$base64":"55Sw5Lit/w==","encoding":"UTF-8"}],
+              ["url",{"$base64":"aHR0cDovL2V4YW1wbGUuY29tL/8/dG9rZW49U0VDUkVU","encoding":"UTF-8"}],
+              [
+                "nest",
+                {
+                  "ip": "192.168.1.10",
+                  "id": "42",
+                  "name": "bob",
+                  "null": null,
+                  "deep": {
+                    "id": "7"
+                  }
+                }
+              ],
+              [{"$base64":"bWFpbP8=","encoding":"UTF-8"},"jose@mydomain"],
+              [{"$base64":"/w==","encoding":"UTF-8"},"jose@mydomain"],
+              ["zz","jose@mydomain"]
+            ]
+          }
+        },
+        "5": {
+          "tag": "test",
+          "record": {
+            "host": {"$string":"133b30827f06c06adf6df0b64f27eec39f9f1feb78e31fbf5ee54198fa289ecd","encoding":"US-ASCII"},
+            "host6": "2001:0db8:0000::0001",
+            "mapped": {"$string":"4c5bcfdc618bd5911a498f73fb3ffd83f9ef3c3fd10723ba4bc8d8e2a0321045","encoding":"US-ASCII"},
+            "not_ip": "10.1.2.3:8080",
+            "ips": [
+              "10.1.2.3",
+              null,
+              "x",
+              ["10.9.9.9"]
+            ],
+            "user_id": {"$string":"78bf486120587365d267d9bba3d30987e8de010258018a90d91da75faf573abb","encoding":"US-ASCII"},
+            "session_id": "sess-secret",
+            "member_id": {"$string":"bf1d7ec9d8b772042c31f9f62c996d1c2e6a48f67bb10b1991fb3868489d8aeb","encoding":"US-ASCII"},
+            "mail": {"$string":"79b35b7af04951dcb924f589d9c91e54bc7d0b9c77569580548471a3cc26b71a","encoding":"US-ASCII"},
+            "tel": "00-0000-0000",
+            "card": "4111111111111111",
+            "num": 42,
+            "null": null,
+            "false": false,
+            "list": ["1000","2000"],
+            "user.name": "flat",
+            "user": "alice",
+            "name": "Tanaka",
+            "url": "http://user:pw@example.com/p?token=SECRET#f",
+            "nest": {
+              "ip": "1.2.3.4, 10.0.0.1",
+              "id": "fe80::1%eth0"
+            }
+          }
+        },
+        "6": {
+          "tag": "test",
+          "record": {
+            "host": {"$string":"ae331a8ad15dfb264595dd127adc70faf3399ce9311fd63e6da9991649709a2a","encoding":"US-ASCII"},
+            "host6": "2001:db8:0:8d3:0:8a2e:70:7344",
+            "mapped": {"$string":"c724db1db35f8a15653eefd6047e618f81e97c178daf73253922d43d2b8f9e0f","encoding":"US-ASCII"},
+            "not_ip": "localhost",
+            "ips": ["10.1.2.3","2001:db8::1"],
+            "user_id": "//ex.com/p?token=SECRET",
+            "session_id": "sess-secret",
+            "member_id": "http://ex.com/a b?email=a@b.c",
+            "mail": "mailto:alice@example.com",
+            "tel": "/p;jsessionid=SECRET?x=1",
+            "card": "/my/path",
+            "num": 42,
+            "null": null,
+            "false": false,
+            "list": ["/a?x=1","http://u:p@ex.com/b?y=2"],
+            "user.name": "flat",
+            "user": "alice",
+            "name": "http://ex.com/ü?email=a@b.c",
+            "url": "/reset?token=SECRET&email=a@b.c",
+            "nest": {
+              "ip": "192.168.1.10",
+              "id": "42",
+              "name": "bob",
+              "null": null,
+              "deep": {
+                "id": "7"
+              }
+            }
+          }
+        },
+        "7": {
+          "tag": "test",
+          "record": {
+            "host": {"$string":"ae331a8ad15dfb264595dd127adc70faf3399ce9311fd63e6da9991649709a2a","encoding":"US-ASCII"},
+            "host6": "2001:db8:0:8d3:0:8a2e:70:7344",
+            "mapped": {"$string":"c724db1db35f8a15653eefd6047e618f81e97c178daf73253922d43d2b8f9e0f","encoding":"US-ASCII"},
+            "not_ip": "localhost",
+            "ips": ["10.1.2.3","2001:db8::1"],
+            "user_id": "alice",
+            "session_id": "sess-secret",
+            "member_id": "12345",
+            "mail": "example@example.com",
+            "tel": "00-0000-0000",
+            "card": "4111111111111111",
+            "num": 42,
+            "null": null,
+            "false": false,
+            "list": ["1000","2000"],
+            "user.name": "flat",
+            "user": "alice",
+            "name": "Tanaka",
+            "url": "http://user:pw@example.com/p?token=SECRET#f",
+            "nest": {
+              "ip": "192.168.1.10",
+              "id": "42",
+              "name": "bob",
+              "null": null,
+              "deep": {
+                "id": "7"
+              }
+            },
+            "": "empty key",
+            "a": "a",
+            "b": "b",
+            "c": "c",
+            "d": "d",
+            "id": "id",
+            "ab": "ab"
+          }
+        },
+        "8": {
+          "tag": "test",
+          "record": {
+            "host": {"$string":"ae331a8ad15dfb264595dd127adc70faf3399ce9311fd63e6da9991649709a2a","encoding":"US-ASCII"},
+            "host6": "2001:db8:0:8d3:0:8a2e:70:7344",
+            "mapped": {"$string":"c724db1db35f8a15653eefd6047e618f81e97c178daf73253922d43d2b8f9e0f","encoding":"US-ASCII"},
+            "not_ip": "localhost",
+            "ips": ["10.1.2.3","2001:db8::1"],
+            "user_id": "alice",
+            "session_id": "sess-secret",
+            "member_id": "12345",
+            "mail": "example@example.com",
+            "tel": "00-0000-0000",
+            "card": "4111111111111111",
+            "num": 42,
+            "null": null,
+            "false": false,
+            "list": ["1000","2000"],
+            "user.name": "flat",
+            "user": "alice",
+            "name": "Tanaka",
+            "url": "http://user:pw@example.com/p?token=SECRET#f",
+            "nest": {
+              "ip": "192.168.1.10",
+              "id": "42",
+              "name": "bob",
+              "null": null,
+              "deep": {
+                "id": "7"
+              }
+            }
+          }
+        }
+      }
+    },
     "extra_salts.conf": {
       "digest": "5b678c3e74fb41f7",
       "status": "ok",

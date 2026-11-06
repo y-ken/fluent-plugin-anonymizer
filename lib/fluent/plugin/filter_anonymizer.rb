@@ -490,7 +490,7 @@ module Fluent::Plugin
       ->(record){
         begin
           record.each_pair do |key, value|
-            next unless (network.include?(value) rescue nil)
+            next unless AnonymizerFilter.subnet_include?(network, value)
             record[key] = conv.call(value, opts.salt || salt_determine(key))
           end
         rescue => e
@@ -498,6 +498,26 @@ module Fluent::Plugin
         end
         record
       }
+    end
+
+    # Whether value is in network, as ipaddr 1.2.2 (Ruby 2.7) matched it for
+    # v1.0.0: an IPv4 address and its IPv4-mapped IPv6 address are in each
+    # other's network. ipaddr 1.2.3 (Ruby 3.1) and later do not match them.
+    def self.subnet_include?(network, value)
+      return true if (network.include?(value) rescue nil)
+      return false unless value.is_a?(String) && (network.ipv4? || network.ipv4_mapped?)
+      address = begin
+        IPAddr.new(value)
+      rescue StandardError
+        return false
+      end
+      if network.ipv4? && address.ipv4_mapped?
+        network.include?(address.native)
+      elsif network.ipv4_mapped? && address.ipv4?
+        network.include?(address.ipv4_mapped)
+      else
+        false
+      end
     end
   end
 end

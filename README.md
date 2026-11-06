@@ -124,6 +124,7 @@ Specify pattern of value that will be applied hash algorithm.
 * `value_in_subnet` (default: nil)
 
 Specify network of value that will be applied hash algorithm.
+An IPv4 address and its IPv4-mapped IPv6 address, such as `192.168.1.1` and `::ffff:192.168.1.1`, are in each other's network, as in v1.0.0 on Ruby 2.7 (on Ruby 3.1 and later, v1.0.0 did not match them).
 
 * `salt` (default: none)
 
