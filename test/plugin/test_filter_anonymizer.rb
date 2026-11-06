@@ -732,6 +732,27 @@ CONF
       assert_equal [], d.logs.grep(/\[warn\]/)
     end
 
+    test "keys that are the same key warns at start, and masks the value for each" do
+      d = create_driver("<mask sha1>\n  keys a, $.a, $['a'], b, $.c.d, $['c']['d']\n  salt s\n</mask>")
+      d.run(default_tag: 'test') { d.feed(@time, {"a" => "alice", "b" => "bob", "c" => {"d" => "carol"}}) }
+      sha1 = ->(v) { OpenSSL::Digest.new("sha1").update("s").update(v).hexdigest }
+      assert_equal [{"a" => sha1.(sha1.(sha1.("alice"))), "b" => sha1.("bob"), "c" => {"d" => sha1.(sha1.("carol"))}}], d.filtered_records
+      warnings = d.logs.grep(/\[warn\]/)
+      assert_equal 2, warnings.size, d.logs.join
+      assert_include warnings[0], %q("a" and "$.a" and "$['a']" in keys of <mask sha1> are the same key, so its value is masked 3 times)
+      assert_include warnings[1], %q("$.c.d" and "$['c']['d']" in keys of <mask sha1> are the same key, so its value is masked 2 times)
+    end
+
+    test "the same key twice warns too, as it is masked twice as in master" do
+      d = create_driver("<mask sha1>\n  keys a, a\n  salt s\n</mask>")
+      assert_equal 1, d.logs.grep(/\[warn\]: "a" and "a" in keys of <mask sha1> are the same key/).size, d.logs.join
+    end
+
+    test "the same key in two <mask> sections does not warn" do
+      d = create_driver("<mask sha1>\n  keys a\n  salt s\n</mask>\n<mask md5>\n  keys $.a\n  salt s\n</mask>")
+      assert_equal [], d.logs.grep(/\[warn\]/)
+    end
+
     test "keys skips null, as v1.0.0" do
       d = create_driver("<mask sha1>\n  keys [null, \"a\"]\n  salt s\n</mask>")
       d.run(default_tag: 'test') { d.feed(@time, {nil => "x", "a" => "alice"}) }

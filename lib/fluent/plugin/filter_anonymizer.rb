@@ -252,8 +252,10 @@ EOF
         conv = MASK_METHODS[c.method].call(c)
         # null in keys is skipped, as in v1.0.0.
         keys = c.keys.compact
-        keys.each_with_index do |key, i|
-          @masks << masker_for_key_chain(conv, key_path(key, keys[(i + 1)..-1], c), c)
+        paths = keys.each_with_index.map { |key, i| key_path(key, keys[(i + 1)..-1], c) }
+        warn_same_paths(keys, paths, c)
+        paths.each do |path|
+          @masks << masker_for_key_chain(conv, path, c)
         end
         @masks << masker_for_key_pattern(conv, c.key_pattern, c) if c.key_pattern
         @masks << masker_for_value_pattern(conv, c.value_pattern, c) if c.value_pattern
@@ -334,6 +336,16 @@ EOF
       joined = parts.join(',')
       " keys splits its value at each comma, so #{joined} became #{parts.map(&:inspect).join(' and ')}. " \
         "For a key with a comma, write keys as a JSON array, such as keys [#{joined.inspect}]."
+    end
+
+    # Warns for keys in a <mask> that are the same key, because the value of
+    # the key is masked once for each of them, as in v1.0.0 and master.
+    def warn_same_paths(keys, paths, opts)
+      keys.zip(paths).group_by(&:last).each_value do |same|
+        next if same.size < 2
+        log.warn "#{same.map { |k, _| k.inspect }.join(' and ')} in keys of <mask #{opts.method}> are the same key, " \
+                 "so its value is masked #{same.size} times. Write the key once."
+      end
     end
 
     # Replaces the value at path in record with the value of the block, if
